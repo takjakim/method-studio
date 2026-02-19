@@ -1,0 +1,31 @@
+id,age,height,weight,gender,education,income,satisfaction
+1,25,165.2,62.3,Male,Bachelor,45000,7
+2,32,172.8,78.5,Female,Master,62000,8
+3,28,158.4,55.1,Female,Bachelor,48000,6
+4,45,180.1,85.2,Male,PhD,95000,9
+5,38,175.5,72.8,Male,Master,78000,7
+6,29,162.0,58.9,Female,Bachelor,52000,8
+7,52,168.3,81.4,Male,Bachelor,65000,6
+8,34,170.2,68.5,Female,Master,71000,8
+9,41,183.7,92.1,Male,PhD,102000,9
+10,27,156.8,51.2,Female,High School,35000,5
+11,36,177.4,79.3,Male,Bachelor,58000,7
+12,43,164.5,66.8,Female,Master,82000,8
+13,31,169.9,73.2,Male,Bachelor,55000,6
+14,48,171.2,88.5,Female,PhD,98000,9
+15,26,160.3,54.7,Female,Bachelor,42000,7
+16,39,185.6,95.2,Male,Master,85000,8
+17,33,167.8,64.3,Female,Bachelor,49000,6
+18,55,174.1,82.7,Male,High School,45000,5
+19,30,159.5,57.8,Female,Master,67000,8
+20,44,178.9,76.4,Male,PhD,110000,9
+21,35,163.2,61.5,Female,Bachelor,53000,7
+22,47,181.4,89.8,Male,Master,92000,8
+23,29,157.6,52.9,Female,Bachelor,46000,6
+24,42,176.3,77.1,Male,PhD,105000,9
+25,37,168.7,69.2,Female,Master,75000,8
+26,51,173.5,84.6,Male,Bachelor,62000,6
+27,28,161.8,56.4,Female,High School,38000,5
+28,40,179.2,80.3,Male,Master,88000,8
+29,33,165.9,63.7,Female,Bachelor,51000,7
+30,46,182.3,91.5,Male,PhD,115000,9

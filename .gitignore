@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+target/
+*.tsbuildinfo
+
+# Tauri
+apps/desktop/src-tauri/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Portable runtimes (large files)
+resources/r-portable/
+resources/python-portable/
+
+# OMC state
+.omc/
+*.pdf
+Rplots.pdf
+Rplots.pdf

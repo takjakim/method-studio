@@ -1,0 +1,358 @@
+{
+  "datasets": [
+    {
+      "id": "descriptives",
+      "name": "Survey Data (Descriptive Statistics)",
+      "file": "descriptives_example.csv",
+      "description": "30 participants with demographic and survey data. Includes age, height, weight, gender, education level, income, and satisfaction scores.",
+      "variables": {
+        "numeric": ["age", "height", "weight", "income", "satisfaction"],
+        "categorical": ["gender", "education"]
+      },
+      "suggestedAnalysis": ["descriptives"],
+      "sampleSize": 30
+    },
+    {
+      "id": "one-sample-ttest",
+      "name": "Test Scores (One-Sample T-Test)",
+      "file": "one_sample_ttest_example.csv",
+      "description": "30 participants with test scores and health measurements. Use to test if population mean equals a hypothesized value (e.g., test_score mean = 80).",
+      "variables": {
+        "numeric": ["test_score", "reaction_time", "blood_pressure", "cholesterol"]
+      },
+      "suggestedAnalysis": ["ttest-one-sample"],
+      "sampleSize": 30,
+      "testHypotheses": {
+        "test_score": "H0: μ = 80 (national average)",
+        "blood_pressure": "H0: μ = 120 (normal range)",
+        "cholesterol": "H0: μ = 200 (borderline high)"
+      }
+    },
+    {
+      "id": "independent-ttest",
+      "name": "Treatment Groups (Independent T-Test)",
+      "file": "independent_ttest_example.csv",
+      "description": "30 participants divided into two groups (treatment vs control). Compare performance metrics between groups.",
+      "variables": {
+        "numeric": ["score", "performance", "response_time", "accuracy"],
+        "grouping": "group"
+      },
+      "suggestedAnalysis": ["ttest-independent"],
+      "sampleSize": 30,
+      "groups": {
+        "1": "Treatment Group (n=15)",
+        "2": "Control Group (n=15)"
+      }
+    },
+    {
+      "id": "paired-ttest",
+      "name": "Pre-Post Measurements (Paired T-Test)",
+      "file": "paired_ttest_example.csv",
+      "description": "30 participants measured before and after an intervention. Compare pre-test vs post-test scores, weight loss, anxiety reduction.",
+      "variables": {
+        "pairs": [
+          {"var1": "pre_test", "var2": "post_test", "label": "Academic Performance"},
+          {"var1": "weight_before", "var2": "weight_after", "label": "Weight Loss Program"},
+          {"var1": "anxiety_pre", "var2": "anxiety_post", "label": "Anxiety Treatment"}
+        ]
+      },
+      "suggestedAnalysis": ["ttest-paired"],
+      "sampleSize": 30
+    },
+    {
+      "id": "anova",
+      "name": "Treatment Comparison (One-Way ANOVA)",
+      "file": "anova_example.csv",
+      "description": "30 participants across 3 treatment groups (A, B, C). Compare scores, improvement, and satisfaction across groups. Group A shows highest performance.",
+      "variables": {
+        "numeric": ["score", "improvement", "satisfaction"],
+        "grouping": "treatment"
+      },
+      "suggestedAnalysis": ["anova-oneway"],
+      "sampleSize": 30,
+      "groups": {
+        "A": "Treatment A (n=10) - New method",
+        "B": "Treatment B (n=10) - Standard method",
+        "C": "Treatment C (n=10) - Control"
+      }
+    },
+    {
+      "id": "correlation",
+      "name": "Student Performance (Correlation)",
+      "file": "correlation_example.csv",
+      "description": "30 students with study habits and academic outcomes. Explore relationships between study hours, sleep, exam scores, stress, motivation, and attendance.",
+      "variables": {
+        "numeric": ["study_hours", "sleep_hours", "exam_score", "stress_level", "motivation", "attendance"]
+      },
+      "suggestedAnalysis": ["correlation"],
+      "sampleSize": 30,
+      "expectedCorrelations": {
+        "positive": ["study_hours ↔ exam_score", "motivation ↔ attendance", "sleep_hours ↔ exam_score"],
+        "negative": ["stress_level ↔ exam_score", "stress_level ↔ sleep_hours"]
+      }
+    },
+    {
+      "id": "efa",
+      "name": "Personality Survey (Factor Analysis)",
+      "file": "efa_example.csv",
+      "description": "50 participants responded to 12 survey items. Items 1-6 and 10 load on Factor 1 (Extraversion), items 7-9 and 11-12 load on Factor 2 (Conscientiousness).",
+      "variables": {
+        "numeric": ["item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10", "item11", "item12"]
+      },
+      "suggestedAnalysis": ["efa"],
+      "sampleSize": 50,
+      "expectedFactors": {
+        "Factor1": ["item1", "item2", "item3", "item4", "item5", "item6", "item10"],
+        "Factor2": ["item7", "item8", "item9", "item11", "item12"]
+      }
+    },
+    {
+      "id": "regression",
+      "name": "Salary Prediction (Linear Regression)",
+      "file": "regression_example.csv",
+      "description": "30 employees with salary and predictor variables. Predict salary from experience, education, performance, and age. Strong predictors: experience, education.",
+      "variables": {
+        "dependent": "salary",
+        "predictors": ["experience", "education", "performance", "age"],
+        "categorical": ["department"]
+      },
+      "suggestedAnalysis": ["regression-linear"],
+      "sampleSize": 30,
+      "expectedResults": {
+        "strongPredictors": ["experience", "education"],
+        "moderatePredictors": ["performance"],
+        "R2_estimate": "0.85-0.95"
+      }
+    },
+    {
+      "id": "mediation",
+      "name": "Work Stress Mediation (PROCESS Model 4)",
+      "file": "mediation_example.csv",
+      "description": "50 employees with work stress, job satisfaction, and turnover intention. Tests whether job satisfaction mediates the relationship between work stress and turnover intention.",
+      "variables": {
+        "independent": "work_stress",
+        "mediator": "job_satisfaction",
+        "dependent": "turnover_intention",
+        "covariates": ["tenure"],
+        "categorical": ["department"]
+      },
+      "suggestedAnalysis": ["mediation"],
+      "sampleSize": 50,
+      "expectedResults": {
+        "directEffect": "positive (stress → turnover)",
+        "indirectEffect": "negative (stress → low satisfaction → turnover)",
+        "mediationType": "partial mediation"
+      }
+    },
+    {
+      "id": "moderation",
+      "name": "Training Effectiveness (PROCESS Model 1)",
+      "file": "moderation_example.csv",
+      "description": "50 employees with training hours, performance scores, and prior experience. Tests whether prior experience moderates the relationship between training and performance.",
+      "variables": {
+        "independent": "training_hours",
+        "moderator": "prior_experience",
+        "dependent": "performance_score",
+        "covariates": ["age"],
+        "categorical": ["education_level"]
+      },
+      "suggestedAnalysis": ["moderation"],
+      "sampleSize": 50,
+      "expectedResults": {
+        "mainEffect": "positive (training → performance)",
+        "interaction": "negative (training effect weaker for experienced workers)",
+        "simpleSlopes": "significant at low and mean experience"
+      }
+    },
+    {
+      "id": "cfa",
+      "name": "Personality Scale (Confirmatory Factor Analysis)",
+      "file": "cfa_example.csv",
+      "description": "60 participants responded to 12 personality items measuring 3 latent factors: Extraversion (ext1-4), Conscientiousness (con1-4), and Neuroticism (neu1-4).",
+      "variables": {
+        "factors": {
+          "Extraversion": ["ext1", "ext2", "ext3", "ext4"],
+          "Conscientiousness": ["con1", "con2", "con3", "con4"],
+          "Neuroticism": ["neu1", "neu2", "neu3", "neu4"]
+        }
+      },
+      "suggestedAnalysis": ["cfa"],
+      "sampleSize": 60,
+      "expectedResults": {
+        "modelFit": "good (CFI > 0.95, RMSEA < 0.08)",
+        "factorLoadings": "all > 0.6"
+      }
+    },
+    {
+      "id": "path-analysis",
+      "name": "Academic Achievement (Path Analysis)",
+      "file": "path_analysis_example.csv",
+      "description": "50 students with SES, parental involvement, academic motivation, study habits, and achievement. Tests a path model: SES → parental involvement → motivation → study habits → achievement.",
+      "variables": {
+        "exogenous": ["ses"],
+        "endogenous": ["parental_involvement", "academic_motivation", "study_habits", "academic_achievement"]
+      },
+      "suggestedAnalysis": ["path-analysis"],
+      "sampleSize": 50,
+      "expectedResults": {
+        "directEffects": "all positive and significant",
+        "indirectEffects": "SES has significant indirect effect on achievement"
+      }
+    },
+    {
+      "id": "moderated-mediation",
+      "name": "Stress-Depression Study (PROCESS Model 7)",
+      "file": "moderated_mediation_example.csv",
+      "description": "100 participants with stress, social support (moderator), coping (mediator), and depression (outcome). Tests whether social support moderates the X→M path in the mediation model.",
+      "variables": {
+        "independent": "stress",
+        "mediator": "coping",
+        "moderator": "social_support",
+        "dependent": "depression"
+      },
+      "suggestedAnalysis": ["moderated-mediation"],
+      "sampleSize": 100,
+      "expectedResults": {
+        "conditionalIndirectEffect": "significant at low social support",
+        "indexOfModeratedMediation": "negative (protective effect of support)"
+      }
+    },
+    {
+      "id": "serial-mediation",
+      "name": "Work-Family Study (Serial Mediation)",
+      "file": "serial_mediation_example.csv",
+      "description": "100 employees with workload (X), work stress (M1), burnout (M2), and life satisfaction (Y). Tests sequential mediation: workload → stress → burnout → life satisfaction.",
+      "variables": {
+        "independent": "workload",
+        "mediator1": "work_stress",
+        "mediator2": "burnout",
+        "dependent": "life_satisfaction"
+      },
+      "suggestedAnalysis": ["serial-mediation"],
+      "sampleSize": 100,
+      "expectedResults": {
+        "serialIndirectEffect": "negative (high workload → high stress → burnout → low satisfaction)",
+        "specificIndirectEffects": "all significant"
+      }
+    },
+    {
+      "id": "multigroup-cfa",
+      "name": "Cross-Cultural Scale Validation (Multigroup CFA)",
+      "file": "multigroup_cfa_example.csv",
+      "description": "300 participants across 3 cultural groups testing measurement invariance of a 12-item scale with 3 factors.",
+      "variables": {
+        "factors": {
+          "Factor1": ["x1", "x2", "x3", "x4"],
+          "Factor2": ["x5", "x6", "x7", "x8"],
+          "Factor3": ["x9", "x10", "x11", "x12"]
+        },
+        "grouping": "group"
+      },
+      "suggestedAnalysis": ["multigroup-cfa"],
+      "sampleSize": 300,
+      "expectedResults": {
+        "configural": "good fit",
+        "metric": "partial invariance",
+        "scalar": "may require modification"
+      }
+    },
+    {
+      "id": "full-sem",
+      "name": "Organizational Behavior (Full SEM)",
+      "file": "sem_example.csv",
+      "description": "250 employees with latent variables for Leadership (4 items), Engagement (4 items), Performance (4 items), and Satisfaction (4 items). Tests structural model with measurement.",
+      "variables": {
+        "latentVariables": {
+          "Leadership": ["lead1", "lead2", "lead3", "lead4"],
+          "Engagement": ["eng1", "eng2", "eng3", "eng4"],
+          "Performance": ["perf1", "perf2", "perf3", "perf4"],
+          "Satisfaction": ["sat1", "sat2", "sat3", "sat4"]
+        }
+      },
+      "suggestedAnalysis": ["full-sem"],
+      "sampleSize": 250,
+      "expectedResults": {
+        "structuralPaths": "Leadership → Engagement → Performance/Satisfaction",
+        "modelFit": "good (CFI > 0.95, RMSEA < 0.06)"
+      }
+    },
+    {
+      "id": "multilevel",
+      "name": "School Achievement (Multilevel/HLM)",
+      "file": "multilevel_example.csv",
+      "description": "500 students nested within 25 schools. Level-1: student SES and math achievement. Level-2: school type and mean SES. Tests cross-level interactions.",
+      "variables": {
+        "level1": {
+          "outcome": "math_score",
+          "predictors": ["student_ses", "gender"]
+        },
+        "level2": {
+          "grouping": "school_id",
+          "predictors": ["school_type", "school_ses"]
+        }
+      },
+      "suggestedAnalysis": ["multilevel"],
+      "sampleSize": 500,
+      "clusters": 25,
+      "expectedResults": {
+        "ICC": "moderate (0.15-0.25)",
+        "randomEffects": "significant variance in slopes",
+        "crossLevelInteraction": "school SES moderates student SES effect"
+      }
+    },
+    {
+      "id": "process-model-8",
+      "name": "Leadership & Performance (PROCESS Model 8)",
+      "file": "process_model8_example.csv",
+      "description": "80 teams with leadership style (X), team cohesion (M), job performance (Y), and organizational culture (W). Model 8: W moderates both X→M and X→Y paths.",
+      "variables": {
+        "independent": "leadership_style",
+        "mediator": "team_cohesion",
+        "moderator": "organizational_culture",
+        "dependent": "job_performance"
+      },
+      "suggestedAnalysis": ["process-model-8"],
+      "sampleSize": 80,
+      "expectedResults": {
+        "moderatedPaths": "W moderates a-path (X→M) and c'-path (X→Y)",
+        "conditionalEffects": "significant at different levels of culture"
+      }
+    },
+    {
+      "id": "process-model-58",
+      "name": "Advertising & Purchase (PROCESS Model 58)",
+      "file": "process_model58_example.csv",
+      "description": "80 consumers with advertising spend (X), brand awareness (M), purchase intention (Y), and product quality (W). Model 58: W moderates both X→M and M→Y paths.",
+      "variables": {
+        "independent": "advertising_spend",
+        "mediator": "brand_awareness",
+        "moderator": "product_quality",
+        "dependent": "purchase_intention"
+      },
+      "suggestedAnalysis": ["process-model-58"],
+      "sampleSize": 80,
+      "expectedResults": {
+        "moderatedPaths": "W moderates a-path (X→M) and b-path (M→Y)",
+        "conditionalIndirectEffect": "varies by product quality"
+      }
+    },
+    {
+      "id": "process-model-59",
+      "name": "Leadership & Commitment (PROCESS Model 59)",
+      "file": "process_model59_example.csv",
+      "description": "80 employees with transformational leadership (X), employee engagement (M), organizational commitment (Y), and trust climate (W). Model 59: W moderates all paths (a, b, c').",
+      "variables": {
+        "independent": "transformational_leadership",
+        "mediator": "employee_engagement",
+        "moderator": "trust_climate",
+        "dependent": "organizational_commitment"
+      },
+      "suggestedAnalysis": ["process-model-59"],
+      "sampleSize": 80,
+      "expectedResults": {
+        "moderatedPaths": "W moderates all paths (a, b, c')",
+        "conditionalEffects": "all effects strengthened by high trust climate"
+      }
+    }
+  ]
+}

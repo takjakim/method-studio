@@ -1,0 +1,26 @@
+{
+  "name": "method-studio",
+  "version": "0.1.0",
+  "description": "Open-source statistical analysis platform - R/Python powered",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @method-studio/desktop dev",
+    "build": "pnpm --filter @method-studio/desktop build",
+    "tauri": "pnpm --filter @method-studio/desktop tauri",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

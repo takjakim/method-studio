@@ -1,0 +1,39 @@
+[package]
+name = "method-studio"
+version = "0.1.0"
+description = "Method Studio - Open-source statistical analysis platform"
+authors = ["Method Studio Contributors"]
+license = "MIT"
+repository = "https://github.com/method-studio/method-studio"
+default-run = "method-studio"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "method_studio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "method-studio"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+tauri-plugin-shell = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+
+[features]
+# This feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT remove this
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

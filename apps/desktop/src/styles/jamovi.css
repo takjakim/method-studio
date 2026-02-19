@@ -1,0 +1,1029 @@
+/**
+ * jamovi.css — Jamovi-inspired component styles for Method Studio
+ *
+ * Design language: Clean statistical software UI
+ * Reference: jamovi.org
+ *
+ * Architecture: CSS custom properties + semantic class names.
+ * All jamovi-namespaced classes are prefixed with .jv- to avoid
+ * collision with globals.css Tailwind utilities.
+ */
+
+/* ============================================================
+   LOCAL TOKENS (jamovi palette — light mode only for now)
+   ============================================================ */
+:root {
+  /* Panel backgrounds */
+  --jv-bg-dialog:        #f1f3f6;
+  --jv-bg-panel:         #f7f8fa;
+  --jv-bg-panel-alt:     #eef0f4;
+  --jv-bg-surface:       #ffffff;
+  --jv-bg-input:         #ffffff;
+  --jv-bg-hover:         #e8ecf4;
+  --jv-bg-active:        #dce4f5;
+  --jv-bg-selected:      #2f72d2;
+  --jv-bg-slot-empty:    #fafbfc;
+  --jv-bg-slot-filled:   #eef4ff;
+  --jv-bg-slot-active:   #e0ebff;
+  --jv-bg-drag-over:     #e8f0fe;
+
+  /* Text */
+  --jv-text-primary:     #18192a;
+  --jv-text-secondary:   #45506a;
+  --jv-text-muted:       #8890a8;
+  --jv-text-inverse:     #ffffff;
+  --jv-text-accent:      #2563eb;
+  --jv-text-placeholder: #aab0c4;
+
+  /* Borders */
+  --jv-border:           #ced3df;
+  --jv-border-light:     #e2e6f0;
+  --jv-border-strong:    #96a0b8;
+  --jv-border-accent:    #3b7bdb;
+  --jv-border-slot:      #c4cce0;
+  --jv-border-dashed:    #b4bcd0;
+  --jv-border-drag-over: #2563eb;
+
+  /* Accent / brand */
+  --jv-accent:           #2563eb;
+  --jv-accent-hover:     #1d4ed8;
+  --jv-accent-light:     #dbeafe;
+  --jv-accent-subtle:    #eff4ff;
+
+  /* Drag overlay */
+  --jv-drag-overlay-bg:  #ffffff;
+  --jv-drag-overlay-border: #3b7bdb;
+  --jv-drag-overlay-shadow: 0 8px 24px rgba(37, 99, 235, 0.22), 0 2px 8px rgba(0,0,0,0.14);
+
+  /* Variable type colours */
+  --jv-type-numeric:     #2f72d2;
+  --jv-type-string:      #c2640a;
+  --jv-type-date:        #087c54;
+
+  /* Semantic */
+  --jv-success:          #16a34a;
+  --jv-success-bg:       #dcfce7;
+  --jv-danger:           #dc2626;
+  --jv-danger-hover:     #b91c1c;
+
+  /* Chips */
+  --jv-chip-bg:          #dbeafe;
+  --jv-chip-text:        #1e3a8a;
+  --jv-chip-border:      #bfdbfe;
+  --jv-chip-remove:      #3b82f6;
+  --jv-chip-remove-hover:#1d4ed8;
+
+  /* Spacing */
+  --jv-sp-xs:  0.25rem;   /* 4px  */
+  --jv-sp-sm:  0.5rem;    /* 8px  */
+  --jv-sp-md:  0.75rem;   /* 12px */
+  --jv-sp-lg:  1rem;      /* 16px */
+  --jv-sp-xl:  1.5rem;    /* 24px */
+
+  /* Typography */
+  --jv-font-xs:  0.6875rem;  /* 11px */
+  --jv-font-sm:  0.75rem;    /* 12px */
+  --jv-font-md:  0.8125rem;  /* 13px */
+  --jv-font-base: 0.875rem;  /* 14px */
+
+  /* Geometry */
+  --jv-radius-sm:  3px;
+  --jv-radius-md:  5px;
+  --jv-radius-lg:  8px;
+  --jv-radius-chip: 3px;
+
+  /* Shadows */
+  --jv-shadow-dialog:  0 16px 48px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --jv-shadow-panel:   0 1px 3px rgba(0, 0, 0, 0.06);
+  --jv-shadow-input:   inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  --jv-shadow-focus:   0 0 0 3px rgba(37, 99, 235, 0.18);
+  --jv-shadow-chip:    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* ============================================================
+   DIALOG SHELL
+   ============================================================ */
+
+.jv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(10, 14, 26, 0.45);
+  backdrop-filter: blur(2px);
+  animation: jv-overlay-in 0.15s ease;
+}
+
+@keyframes jv-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.jv-dialog {
+  background-color: var(--jv-bg-dialog);
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-lg);
+  box-shadow: var(--jv-shadow-dialog);
+  display: flex;
+  flex-direction: column;
+  width: 760px;
+  max-width: 96vw;
+  max-height: 88vh;
+  overflow: hidden;
+  animation: jv-dialog-in 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: var(--jv-font-base);
+  color: var(--jv-text-primary);
+}
+
+@keyframes jv-dialog-in {
+  from { opacity: 0; transform: scale(0.95) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+/* ---- Header ---- */
+.jv-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px var(--jv-sp-lg);
+  background: linear-gradient(to bottom, #ffffff, var(--jv-bg-panel));
+  border-bottom: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-lg) var(--jv-radius-lg) 0 0;
+  user-select: none;
+}
+
+.jv-dialog-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.jv-dialog-eyebrow {
+  font-size: var(--jv-font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--jv-text-muted);
+}
+
+.jv-dialog-title {
+  font-size: var(--jv-font-base);
+  font-weight: 700;
+  color: var(--jv-text-primary);
+  letter-spacing: -0.015em;
+}
+
+.jv-dialog-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  border-radius: var(--jv-radius-sm);
+  color: var(--jv-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+.jv-dialog-close:hover {
+  background-color: var(--jv-bg-hover);
+  color: var(--jv-text-primary);
+}
+
+/* ---- Body (3-panel) ---- */
+.jv-dialog-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ---- Footer ---- */
+.jv-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px var(--jv-sp-lg);
+  background-color: var(--jv-bg-panel);
+  border-top: 1px solid var(--jv-border);
+  border-radius: 0 0 var(--jv-radius-lg) var(--jv-radius-lg);
+  user-select: none;
+}
+
+/* ============================================================
+   ENGINE SELECTOR (footer left)
+   ============================================================ */
+
+.jv-engine-group {
+  display: flex;
+  align-items: center;
+  gap: var(--jv-sp-sm);
+}
+
+.jv-engine-label {
+  font-size: var(--jv-font-xs);
+  font-weight: 500;
+  color: var(--jv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.jv-engine-radio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: var(--jv-font-sm);
+  color: var(--jv-text-secondary);
+  user-select: none;
+}
+
+.jv-engine-radio input[type="radio"] {
+  accent-color: var(--jv-accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+/* ---- Footer buttons ---- */
+.jv-footer-buttons {
+  display: flex;
+  gap: var(--jv-sp-sm);
+}
+
+.jv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 18px;
+  font-size: var(--jv-font-sm);
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: var(--jv-radius-md);
+  cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.jv-btn-cancel {
+  background-color: var(--jv-bg-surface);
+  border: 1px solid var(--jv-border);
+  color: var(--jv-text-secondary);
+}
+
+.jv-btn-cancel:hover {
+  background-color: var(--jv-bg-hover);
+  border-color: var(--jv-border-strong);
+}
+
+.jv-btn-reset {
+  background-color: transparent;
+  border: 1px solid var(--jv-border);
+  color: var(--jv-text-muted);
+  margin-right: auto;
+}
+
+.jv-btn-reset:hover {
+  background-color: var(--jv-bg-hover);
+  border-color: var(--jv-border-strong);
+  color: var(--jv-text-secondary);
+}
+
+.jv-btn-ok {
+  background-color: var(--jv-accent);
+  border: 1px solid transparent;
+  color: white;
+  min-width: 68px;
+}
+
+.jv-btn-ok:hover:not(:disabled) {
+  background-color: var(--jv-accent-hover);
+}
+
+.jv-btn-ok:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.jv-btn-ok.is-running {
+  background-color: var(--jv-accent-hover);
+  cursor: wait;
+}
+
+.jv-running-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: jv-spin 0.65s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@keyframes jv-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   VARIABLE TRANSFER LIST (left panel)
+   ============================================================ */
+
+.jv-var-panel {
+  display: flex;
+  flex-direction: column;
+  width: 192px;
+  min-width: 160px;
+  background-color: var(--jv-bg-panel);
+  border-right: 1px solid var(--jv-border);
+  overflow: hidden;
+}
+
+.jv-var-panel-header {
+  padding: var(--jv-sp-sm) var(--jv-sp-md);
+  padding-top: 10px;
+  border-bottom: 1px solid var(--jv-border-light);
+}
+
+.jv-var-panel-title {
+  font-size: var(--jv-font-xs);
+  font-weight: 600;
+  color: var(--jv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.jv-search-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: var(--jv-font-sm);
+  font-family: inherit;
+  background-color: var(--jv-bg-input);
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-sm);
+  color: var(--jv-text-primary);
+  box-shadow: var(--jv-shadow-input);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+}
+
+.jv-search-input:focus {
+  border-color: var(--jv-border-accent);
+  box-shadow: var(--jv-shadow-focus);
+}
+
+.jv-search-input::placeholder {
+  color: var(--jv-text-placeholder);
+}
+
+.jv-var-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.jv-var-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px var(--jv-sp-md);
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0;
+  transition: background-color 0.08s;
+  position: relative;
+}
+
+.jv-var-item:hover {
+  background-color: var(--jv-bg-hover);
+}
+
+.jv-var-item.is-selected {
+  background-color: var(--jv-bg-selected);
+  color: var(--jv-text-inverse);
+}
+
+.jv-var-item.is-used {
+  opacity: 0.5;
+}
+
+/* Dragging source row — invisible placeholder kept in layout */
+.jv-var-item.is-dragging {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* Subtle grip-dot handle, revealed on hover */
+.jv-var-drag-handle {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  grid-template-rows: repeat(3, 3px);
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+  cursor: grab;
+}
+
+.jv-var-drag-handle span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: var(--jv-text-muted);
+}
+
+.jv-var-item:hover .jv-var-drag-handle {
+  opacity: 0.7;
+}
+
+.jv-var-item.is-selected .jv-var-drag-handle span {
+  background-color: rgba(255, 255, 255, 0.6);
+}
+
+.jv-var-item.is-selected .jv-var-drag-handle {
+  opacity: 0.8;
+}
+
+/* Variable type icon */
+.jv-var-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+}
+
+.jv-var-icon--numeric {
+  background-color: var(--jv-type-numeric);
+}
+
+.jv-var-icon--string {
+  background-color: var(--jv-type-string);
+}
+
+.jv-var-icon--date {
+  background-color: var(--jv-type-date);
+}
+
+.jv-var-name {
+  font-size: var(--jv-font-md);
+  color: inherit;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jv-var-item.is-selected .jv-var-name {
+  color: white;
+}
+
+.jv-var-label {
+  font-size: var(--jv-font-xs);
+  color: var(--jv-text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jv-var-item.is-selected .jv-var-label {
+  color: rgba(255,255,255,0.7);
+}
+
+.jv-var-count {
+  padding: 5px var(--jv-sp-md);
+  font-size: var(--jv-font-xs);
+  color: var(--jv-text-muted);
+  border-top: 1px solid var(--jv-border-light);
+  user-select: none;
+}
+
+/* Arrow transfer buttons between panels */
+.jv-transfer-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 6px;
+  background-color: var(--jv-bg-panel-alt);
+  border-right: 1px solid var(--jv-border-light);
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.jv-transfer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-sm);
+  background-color: var(--jv-bg-surface);
+  color: var(--jv-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+  user-select: none;
+  line-height: 1;
+  padding: 0;
+}
+
+.jv-transfer-btn:hover:not(:disabled) {
+  background-color: var(--jv-accent);
+  border-color: var(--jv-accent);
+  color: white;
+}
+
+.jv-transfer-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   SLOT PANEL (center)
+   ============================================================ */
+
+.jv-slots-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--jv-sp-md) var(--jv-sp-lg);
+  background-color: var(--jv-bg-dialog);
+  display: flex;
+  flex-direction: column;
+  gap: var(--jv-sp-md);
+}
+
+.jv-slot-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jv-slot-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--jv-font-sm);
+  font-weight: 600;
+  color: var(--jv-text-secondary);
+}
+
+.jv-slot-required-mark {
+  color: var(--jv-danger);
+  font-size: var(--jv-font-sm);
+}
+
+.jv-slot-hint {
+  font-size: var(--jv-font-xs);
+  font-weight: 400;
+  color: var(--jv-text-muted);
+  margin-left: 4px;
+}
+
+.jv-slot-drop-zone {
+  min-height: 42px;
+  border: 1.5px dashed var(--jv-border-dashed);
+  border-radius: var(--jv-radius-md);
+  background-color: var(--jv-bg-slot-empty);
+  padding: 6px var(--jv-sp-sm);
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s,
+    box-shadow 0.12s;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.jv-slot-drop-zone:hover {
+  border-color: var(--jv-border-strong);
+  background-color: var(--jv-bg-hover);
+}
+
+.jv-slot-drop-zone.is-active {
+  border-style: solid;
+  border-color: var(--jv-border-accent);
+  background-color: var(--jv-bg-slot-active);
+  box-shadow: var(--jv-shadow-focus);
+}
+
+.jv-slot-drop-zone.has-vars {
+  border-style: solid;
+  border-color: var(--jv-border-accent);
+  background-color: var(--jv-bg-slot-filled);
+}
+
+/* Drop target highlighted when a draggable hovers over it */
+.jv-slot-drop-zone.is-drag-over {
+  border-style: solid;
+  border-color: var(--jv-border-drag-over);
+  background-color: var(--jv-bg-drag-over);
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.15),
+              var(--jv-shadow-focus);
+  transition:
+    border-color 0.08s,
+    background-color 0.08s,
+    box-shadow 0.08s;
+}
+
+/* Accept icon inside drop zone during drag-over */
+.jv-slot-accept-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--jv-accent);
+  flex-shrink: 0;
+  animation: jv-accept-pulse 0.8s ease infinite alternate;
+}
+
+@keyframes jv-accept-pulse {
+  from { opacity: 0.6; transform: scale(0.9); }
+  to   { opacity: 1;   transform: scale(1.05); }
+}
+
+/* Multiple-variable badge next to slot label */
+.jv-slot-multi-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--jv-accent);
+  background-color: var(--jv-accent-light);
+  border: 1px solid var(--jv-chip-border);
+  border-radius: 10px;
+  padding: 0 5px;
+  line-height: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.jv-slot-placeholder {
+  font-size: var(--jv-font-xs);
+  color: var(--jv-text-placeholder);
+  flex: 1;
+  text-align: center;
+  pointer-events: none;
+  padding: 3px 0;
+}
+
+.jv-slot-drop-zone.is-active .jv-slot-placeholder {
+  color: var(--jv-text-accent);
+}
+
+/* ---- Variable chips inside slots ---- */
+.jv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 5px;
+  background-color: var(--jv-chip-bg);
+  border: 1px solid var(--jv-chip-border);
+  border-radius: var(--jv-radius-chip);
+  font-size: var(--jv-font-xs);
+  font-weight: 500;
+  color: var(--jv-chip-text);
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.jv-chip-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.jv-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jv-chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--jv-chip-remove);
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 2px;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+
+.jv-chip-remove:hover {
+  color: var(--jv-chip-remove-hover);
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
+/* ============================================================
+   DRAG OVERLAY (floating ghost card)
+   ============================================================ */
+
+.jv-drag-overlay {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 7px;
+  background-color: var(--jv-drag-overlay-bg);
+  border: 1.5px solid var(--jv-drag-overlay-border);
+  border-radius: var(--jv-radius-md);
+  box-shadow: var(--jv-drag-overlay-shadow);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: var(--jv-font-md);
+  font-weight: 500;
+  color: var(--jv-text-primary);
+  white-space: nowrap;
+  cursor: grabbing;
+  /* Slight tilt gives it a "picked up" feel */
+  transform: rotate(1.5deg) scale(1.04);
+  /* Hardware-accelerate the overlay */
+  will-change: transform;
+  user-select: none;
+  pointer-events: none;
+}
+
+.jv-drag-overlay-name {
+  color: var(--jv-text-primary);
+  font-weight: 600;
+  font-size: var(--jv-font-md);
+  letter-spacing: -0.01em;
+}
+
+/* Multi-variable drag ghost — used when >1 item is dragged together */
+.jv-drag-overlay-multi {
+  background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
+  border-color: var(--jv-accent);
+  gap: 8px;
+}
+
+.jv-drag-overlay-multi-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background-color: var(--jv-accent);
+  color: #ffffff;
+  font-size: var(--jv-font-xs);
+  font-weight: 700;
+  border-radius: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+
+.jv-drag-overlay-multi .jv-drag-overlay-name {
+  color: var(--jv-accent);
+  font-weight: 600;
+}
+
+/* ============================================================
+   OPTIONS ACCORDION (right panel)
+   ============================================================ */
+
+.jv-options-panel {
+  width: 200px;
+  min-width: 180px;
+  background-color: var(--jv-bg-panel);
+  border-left: 1px solid var(--jv-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.jv-options-panel-title {
+  padding: 10px var(--jv-sp-md) 6px;
+  font-size: var(--jv-font-xs);
+  font-weight: 600;
+  color: var(--jv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--jv-border-light);
+  user-select: none;
+}
+
+/* ---- Accordion section ---- */
+.jv-accordion-section {
+  border-bottom: 1px solid var(--jv-border-light);
+}
+
+.jv-accordion-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px var(--jv-sp-md);
+  font-size: var(--jv-font-sm);
+  font-weight: 600;
+  color: var(--jv-text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  transition: background-color 0.1s;
+  font-family: inherit;
+}
+
+.jv-accordion-trigger:hover {
+  background-color: var(--jv-bg-hover);
+}
+
+.jv-accordion-chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--jv-text-muted);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.jv-accordion-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.jv-accordion-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity  0.18s ease;
+  opacity: 0;
+}
+
+.jv-accordion-body.is-open {
+  max-height: 500px;
+  opacity: 1;
+}
+
+.jv-accordion-content {
+  padding: 4px var(--jv-sp-md) var(--jv-sp-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--jv-sp-sm);
+}
+
+/* ---- Individual option controls ---- */
+.jv-opt-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--jv-font-sm);
+  color: var(--jv-text-primary);
+  line-height: 1.3;
+}
+
+.jv-opt-checkbox input[type="checkbox"] {
+  accent-color: var(--jv-accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.jv-opt-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jv-opt-radio-label-group {
+  font-size: var(--jv-font-xs);
+  font-weight: 500;
+  color: var(--jv-text-secondary);
+  margin-bottom: 3px;
+}
+
+.jv-opt-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--jv-font-sm);
+  color: var(--jv-text-primary);
+  line-height: 1.3;
+}
+
+.jv-opt-radio input[type="radio"] {
+  accent-color: var(--jv-accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.jv-opt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.jv-opt-field-label {
+  font-size: var(--jv-font-xs);
+  font-weight: 500;
+  color: var(--jv-text-secondary);
+}
+
+.jv-opt-select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: var(--jv-font-sm);
+  font-family: inherit;
+  background-color: var(--jv-bg-input);
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-sm);
+  color: var(--jv-text-primary);
+  box-shadow: var(--jv-shadow-input);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  appearance: auto;
+}
+
+.jv-opt-select:focus {
+  border-color: var(--jv-border-accent);
+  box-shadow: var(--jv-shadow-focus);
+}
+
+.jv-opt-number {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: var(--jv-font-sm);
+  font-family: inherit;
+  background-color: var(--jv-bg-input);
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-sm);
+  color: var(--jv-text-primary);
+  box-shadow: var(--jv-shadow-input);
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  box-sizing: border-box;
+}
+
+.jv-opt-number:focus {
+  border-color: var(--jv-border-accent);
+  box-shadow: var(--jv-shadow-focus);
+}
+
+/* ============================================================
+   SCROLLBAR (subtle, jamovi-style)
+   ============================================================ */
+
+.jv-var-list::-webkit-scrollbar,
+.jv-slots-panel::-webkit-scrollbar,
+.jv-options-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.jv-var-list::-webkit-scrollbar-track,
+.jv-slots-panel::-webkit-scrollbar-track,
+.jv-options-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.jv-var-list::-webkit-scrollbar-thumb,
+.jv-slots-panel::-webkit-scrollbar-thumb,
+.jv-options-panel::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,0.15);
+  border-radius: 10px;
+}
+
+.jv-var-list::-webkit-scrollbar-thumb:hover,
+.jv-slots-panel::-webkit-scrollbar-thumb:hover,
+.jv-options-panel::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0,0,0,0.25);
+}

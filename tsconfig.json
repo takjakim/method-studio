@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@method-studio/core": ["packages/core/src"],
+      "@method-studio/r-engine": ["packages/r-engine/src"],
+      "@method-studio/python-engine": ["packages/python-engine/src"],
+      "@method-studio/analysis-specs": ["packages/analysis-specs/src"],
+      "@method-studio/output-renderer": ["packages/output-renderer/src"]
+    }
+  },
+  "references": [
+    { "path": "./apps/desktop" },
+    { "path": "./packages/core" },
+    { "path": "./packages/r-engine" },
+    { "path": "./packages/python-engine" },
+    { "path": "./packages/analysis-specs" },
+    { "path": "./packages/output-renderer" }
+  ]
+}
