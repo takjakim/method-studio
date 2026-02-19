@@ -33,6 +33,7 @@ coverage/
 # Portable runtimes (large files)
 resources/r-portable/
 resources/python-portable/
+apps/desktop/bundled-engines/
 
 # OMC state
 .omc/

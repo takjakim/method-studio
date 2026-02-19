@@ -12,7 +12,127 @@ on:
         default: 'v0.1.0'
 
 jobs:
+  prepare-engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            arch: arm64
+            name: macos-arm64
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            arch: x86_64
+            name: macos-x64
+            target: x86_64-apple-darwin
+          - platform: windows-latest
+            arch: x64
+            name: windows-x64
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache bundled engines
+        id: cache-engines
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/bundled-engines/${{ matrix.name }}
+          key: bundled-engines-${{ matrix.name }}-r4.4.2-py3.12.8-${{ hashFiles('apps/desktop/scripts/prepare-*.sh', 'apps/desktop/scripts/prepare-*.ps1') }}
+          restore-keys: |
+            bundled-engines-${{ matrix.name }}-r4.4.2-py3.12.8-
+
+      - name: Prepare R engine (macOS)
+        id: prepare-r-macos
+        if: steps.cache-engines.outputs.cache-hit != 'true' && runner.os == 'macOS'
+        run: |
+          chmod +x apps/desktop/scripts/prepare-r-macos.sh
+          ./apps/desktop/scripts/prepare-r-macos.sh ${{ matrix.arch }}
+
+      - name: Prepare Python engine (macOS)
+        id: prepare-python-macos
+        if: steps.cache-engines.outputs.cache-hit != 'true' && runner.os == 'macOS'
+        run: |
+          chmod +x apps/desktop/scripts/prepare-python-macos.sh
+          ./apps/desktop/scripts/prepare-python-macos.sh ${{ matrix.arch }}
+
+      - name: Prepare R engine (Windows)
+        id: prepare-r-windows
+        if: steps.cache-engines.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\apps\desktop\scripts\prepare-r-windows.ps1
+
+      - name: Prepare Python engine (Windows)
+        id: prepare-python-windows
+        if: steps.cache-engines.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\apps\desktop\scripts\prepare-python-windows.ps1
+
+      - name: Code sign binaries (macOS)
+        id: sign-binaries
+        if: runner.os == 'macOS'
+        run: |
+          echo "Signing binaries in bundled-engines/${{ matrix.name }}..."
+          BUNDLE_DIR="apps/desktop/bundled-engines/${{ matrix.name }}"
+
+          # Find and sign all .dylib files
+          find "$BUNDLE_DIR" -type f -name "*.dylib" | while read -r file; do
+            echo "Signing: $file"
+            codesign --force --sign - "$file" 2>/dev/null || true
+          done
+
+          # Find and sign all .so files
+          find "$BUNDLE_DIR" -type f -name "*.so" | while read -r file; do
+            echo "Signing: $file"
+            codesign --force --sign - "$file" 2>/dev/null || true
+          done
+
+          # Sign executables in R bin directory
+          if [ -d "$BUNDLE_DIR/r/bin" ]; then
+            for file in "$BUNDLE_DIR/r/bin/"*; do
+              if [ -f "$file" ] && [ -x "$file" ]; then
+                echo "Signing: $file"
+                codesign --force --sign - "$file" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          # Sign executables in Python bin directory
+          if [ -d "$BUNDLE_DIR/python/bin" ]; then
+            for file in "$BUNDLE_DIR/python/bin/"*; do
+              if [ -f "$file" ] && [ -x "$file" ]; then
+                echo "Signing: $file"
+                codesign --force --sign - "$file" 2>/dev/null || true
+              fi
+            done
+          fi
+
+          echo "Code signing complete"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify bundle
+        run: |
+          node apps/desktop/scripts/verify-bundle.js ${{ matrix.name }}
+
+      - name: Upload engines artifact
+        id: upload-engines
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundled-engines-${{ matrix.name }}
+          path: apps/desktop/bundled-engines/${{ matrix.name }}
+          retention-days: 1
+
   build:
+    needs: prepare-engines
     strategy:
       fail-fast: false
       matrix:
@@ -20,21 +140,40 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             name: macOS-ARM64
+            engines-name: macos-arm64
           - platform: macos-latest
             target: x86_64-apple-darwin
             name: macOS-Intel
+            engines-name: macos-x64
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             name: Windows-x64
+            engines-name: windows-x64
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             name: Linux-x64
+            engines-name: null
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download engines artifact
+        id: download-engines
+        if: matrix.engines-name != 'null'
+        uses: actions/download-artifact@v4
+        with:
+          name: bundled-engines-${{ matrix.engines-name }}
+          path: apps/desktop/bundled-engines/${{ matrix.engines-name }}
+
+      - name: Display bundled engines structure
+        if: matrix.engines-name != 'null'
+        run: |
+          echo "Bundled engines for ${{ matrix.engines-name }}:"
+          ls -la apps/desktop/bundled-engines/${{ matrix.engines-name }} || echo "Directory not found"
+        shell: bash
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
-use super::installer::{find_rscript, find_python};
+use super::bundled_engines::{find_bundled_rscript, find_bundled_python, get_bundled_r_library, get_bundled_python_site_packages};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EngineResult {
@@ -15,6 +15,70 @@ pub struct EngineResult {
     pub stderr: String,
     pub exit_code: i32,
     pub success: bool,
+}
+
+// ---------------------------------------------------------------------------
+// System fallback functions
+// ---------------------------------------------------------------------------
+
+/// Find Rscript in system PATH (fallback when bundled not available)
+fn find_system_rscript() -> Option<PathBuf> {
+    // Try PATH first (Unix systems)
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(output) = Command::new("which").arg("Rscript").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return Some(PathBuf::from(path));
+                }
+            }
+        }
+    }
+
+    // Windows fallback
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = Command::new("where").arg("Rscript").output() {
+            if output.status.success() {
+                if let Some(first_line) = String::from_utf8_lossy(&output.stdout).lines().next() {
+                    return Some(PathBuf::from(first_line));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Find Python in system PATH (fallback when bundled not available)
+fn find_system_python() -> Option<PathBuf> {
+    // Try python3 first (preferred on Unix systems)
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(output) = Command::new("which").arg("python3").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return Some(PathBuf::from(path));
+                }
+            }
+        }
+    }
+
+    // Windows: try python.exe
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = Command::new("where").arg("python").output() {
+            if output.status.success() {
+                if let Some(first_line) = String::from_utf8_lossy(&output.stdout).lines().next() {
+                    return Some(PathBuf::from(first_line));
+                }
+            }
+        }
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +432,7 @@ fn rows_to_columnar(rows: &[Value]) -> Value {
 // ---------------------------------------------------------------------------
 
 fn run_with_r_wrapper(
+    app_handle: &tauri::AppHandle,
     wrapper_path: PathBuf,
     script_name: &str,
     request: &AnalysisRequest,
@@ -437,8 +502,13 @@ fn run_with_r_wrapper(
     println!("==========================");
 
     // Spawn wrapper, pipe JSON to stdin, collect stdout.
-    let rscript_cmd = find_rscript()
-        .ok_or_else(|| "Rscript not found. Please install R first.".to_string())?;
+    // Try bundled first, then fall back to system PATH
+    let rscript_cmd = find_bundled_rscript(app_handle)
+        .or_else(find_system_rscript)
+        .ok_or_else(|| "Rscript not found. Neither bundled nor system R is available.".to_string())?;
+
+    // Get bundled R library path
+    let r_library = get_bundled_r_library(app_handle);
 
     // Pass script directory via environment variable for reliable path resolution
     let script_dir = wrapper_path
@@ -446,9 +516,16 @@ fn run_with_r_wrapper(
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let mut child = Command::new(&rscript_cmd)
-        .arg(wrapper_path.to_str().unwrap_or("wrapper.R"))
-        .env("METHOD_STUDIO_SCRIPT_DIR", &script_dir)
+    let mut cmd = Command::new(&rscript_cmd);
+    cmd.arg(wrapper_path.to_str().unwrap_or("wrapper.R"))
+        .env("METHOD_STUDIO_SCRIPT_DIR", &script_dir);
+
+    if let Some(ref lib_path) = r_library {
+        cmd.env("R_LIBS", lib_path)
+           .env("R_LIBS_USER", lib_path);
+    }
+
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -530,6 +607,7 @@ fn run_with_r_wrapper(
 }
 
 fn run_with_python_wrapper(
+    app_handle: &tauri::AppHandle,
     wrapper_path: PathBuf,
     script_name: &str,
     request: &AnalysisRequest,
@@ -596,11 +674,22 @@ fn run_with_python_wrapper(
     println!("Data keys: {:?}", data_map.keys().collect::<Vec<_>>());
     println!("===============================");
 
-    let python_cmd = find_python()
-        .ok_or_else(|| "Python not found. Please install Python first.".to_string())?;
+    // Try bundled first, then fall back to system PATH
+    let python_cmd = find_bundled_python(app_handle)
+        .or_else(find_system_python)
+        .ok_or_else(|| "Python not found. Neither bundled nor system Python is available.".to_string())?;
 
-    let mut child = Command::new(&python_cmd)
-        .arg(wrapper_path.to_str().unwrap_or("wrapper.py"))
+    // Get bundled Python site-packages path
+    let site_packages = get_bundled_python_site_packages(app_handle);
+
+    let mut cmd = Command::new(&python_cmd);
+    cmd.arg(wrapper_path.to_str().unwrap_or("wrapper.py"));
+
+    if let Some(ref sp_path) = site_packages {
+        cmd.env("PYTHONPATH", sp_path);
+    }
+
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -709,7 +798,7 @@ pub async fn run_analysis(
             if !wrapper.exists() {
                 return Err(format!("R wrapper not found at: {}", wrapper.display()));
             }
-            run_with_r_wrapper(wrapper, script_name, &request, &req_id)
+            run_with_r_wrapper(&app_handle, wrapper, script_name, &request, &req_id)
         }
         "python" => {
             let wrapper = engines.join("python-scripts").join("wrapper.py");
@@ -719,7 +808,7 @@ pub async fn run_analysis(
                     wrapper.display()
                 ));
             }
-            run_with_python_wrapper(wrapper, script_name, &request, &req_id)
+            run_with_python_wrapper(&app_handle, wrapper, script_name, &request, &req_id)
         }
         other => Err(format!(
             "Unknown engine '{}'. Expected 'r' or 'python'.",
@@ -737,13 +826,24 @@ pub struct EngineStatus {
 }
 
 #[tauri::command]
-pub async fn run_r_script(script: String) -> Result<EngineResult, String> {
-    let rscript_cmd = find_rscript()
-        .ok_or_else(|| "Rscript not found. Please install R first.".to_string())?;
+pub async fn run_r_script(app_handle: tauri::AppHandle, script: String) -> Result<EngineResult, String> {
+    // Try bundled first, then fall back to system PATH
+    let rscript_cmd = find_bundled_rscript(&app_handle)
+        .or_else(find_system_rscript)
+        .ok_or_else(|| "Rscript not found. Neither bundled nor system R is available.".to_string())?;
 
-    let output = Command::new(&rscript_cmd)
-        .arg("-e")
-        .arg(&script)
+    // Get bundled R library path
+    let r_library = get_bundled_r_library(&app_handle);
+
+    let mut cmd = Command::new(&rscript_cmd);
+    cmd.arg("-e").arg(&script);
+
+    if let Some(ref lib_path) = r_library {
+        cmd.env("R_LIBS", lib_path)
+           .env("R_LIBS_USER", lib_path);
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run R script: {}", e))?;
 
@@ -756,13 +856,23 @@ pub async fn run_r_script(script: String) -> Result<EngineResult, String> {
 }
 
 #[tauri::command]
-pub async fn run_python_script(script: String) -> Result<EngineResult, String> {
-    let python_cmd = find_python()
-        .ok_or_else(|| "Python not found. Please install Python first.".to_string())?;
+pub async fn run_python_script(app_handle: tauri::AppHandle, script: String) -> Result<EngineResult, String> {
+    // Try bundled first, then fall back to system PATH
+    let python_cmd = find_bundled_python(&app_handle)
+        .or_else(find_system_python)
+        .ok_or_else(|| "Python not found. Neither bundled nor system Python is available.".to_string())?;
 
-    let output = Command::new(&python_cmd)
-        .arg("-c")
-        .arg(&script)
+    // Get bundled Python site-packages path
+    let site_packages = get_bundled_python_site_packages(&app_handle);
+
+    let mut cmd = Command::new(&python_cmd);
+    cmd.arg("-c").arg(&script);
+
+    if let Some(ref sp_path) = site_packages {
+        cmd.env("PYTHONPATH", sp_path);
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run Python script: {}", e))?;
 
@@ -775,22 +885,34 @@ pub async fn run_python_script(script: String) -> Result<EngineResult, String> {
 }
 
 #[tauri::command]
-pub async fn check_engine_status() -> Result<EngineStatus, String> {
-    let rscript_path = find_rscript();
-    let python_path = find_python();
+pub async fn check_engine_status(app_handle: tauri::AppHandle) -> Result<EngineStatus, String> {
+    let rscript_path = find_bundled_rscript(&app_handle);
+    let python_path = find_bundled_python(&app_handle);
+
+    let r_library = get_bundled_r_library(&app_handle);
+    let site_packages = get_bundled_python_site_packages(&app_handle);
 
     let r_output = rscript_path.as_ref().and_then(|p| {
-        Command::new(p)
-            .arg("--version")
-            .output()
-            .ok()
+        let mut cmd = Command::new(p);
+        cmd.arg("--version");
+
+        if let Some(ref lib_path) = r_library {
+            cmd.env("R_LIBS", lib_path)
+               .env("R_LIBS_USER", lib_path);
+        }
+
+        cmd.output().ok()
     });
 
     let python_output = python_path.as_ref().and_then(|p| {
-        Command::new(p)
-            .arg("--version")
-            .output()
-            .ok()
+        let mut cmd = Command::new(p);
+        cmd.arg("--version");
+
+        if let Some(ref sp_path) = site_packages {
+            cmd.env("PYTHONPATH", sp_path);
+        }
+
+        cmd.output().ok()
     });
 
     let r_available = r_output.as_ref().map(|o| o.status.success()).unwrap_or(false);

@@ -34,7 +34,8 @@
     "targets": "all",
     "resources": [
       "../../../engines/r-scripts/*",
-      "../../../engines/python-scripts/*"
+      "../../../engines/python-scripts/*",
+      "../bundled-engines/**/*"
     ],
     "icon": [
       "icons/32x32.png",

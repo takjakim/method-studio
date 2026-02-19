@@ -16,11 +16,7 @@ pub fn run() {
             commands::storage::save_dataset,
             commands::storage::list_datasets,
             commands::installer::check_install_status,
-            commands::installer::install_r,
-            commands::installer::install_python,
-            commands::installer::install_r_packages,
-            commands::installer::install_python_packages,
-            commands::installer::install_homebrew,
+            commands::installer::get_engine_paths,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Method Studio");
