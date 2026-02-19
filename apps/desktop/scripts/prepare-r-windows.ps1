@@ -105,35 +105,56 @@ try {
 # Step 4: Copy R to bundled directory
 Write-Host "[4/7] Copying R to bundled directory..." -ForegroundColor Green
 
-# Find R directory (could be R-4.4.2 or just R)
+Write-Host "  Analyzing extraction structure..." -ForegroundColor Gray
+Write-Host "  Extracted directory contents:" -ForegroundColor Gray
+Get-ChildItem -Path $EXTRACT_DIR -Recurse -Depth 2 | ForEach-Object {
+    Write-Host "    $($_.FullName.Replace($EXTRACT_DIR, ''))" -ForegroundColor Gray
+}
+
+# Find R directory by looking for bin/Rscript.exe
 $R_SOURCE_DIR = $null
-if (Test-Path (Join-Path $EXTRACT_DIR "R-$R_VERSION")) {
-    $R_SOURCE_DIR = Join-Path $EXTRACT_DIR "R-$R_VERSION"
-} elseif (Test-Path (Join-Path $EXTRACT_DIR "R")) {
-    $R_SOURCE_DIR = Join-Path $EXTRACT_DIR "R"
-} else {
-    # Look for any directory starting with R-
-    $R_DIRS = Get-ChildItem -Path $EXTRACT_DIR -Directory | Where-Object { $_.Name -match "^R-" }
-    if ($R_DIRS.Count -gt 0) {
-        $R_SOURCE_DIR = $R_DIRS[0].FullName
-    } else {
-        $R_SOURCE_DIR = $EXTRACT_DIR
+$searchPaths = @(
+    $EXTRACT_DIR,
+    (Join-Path $EXTRACT_DIR "R-$R_VERSION"),
+    (Join-Path $EXTRACT_DIR "R")
+)
+
+# Also search for any R-* directories
+Get-ChildItem -Path $EXTRACT_DIR -Directory | Where-Object { $_.Name -match "^R-" } | ForEach-Object {
+    $searchPaths += $_.FullName
+}
+
+foreach ($path in $searchPaths) {
+    $rscriptPath = Join-Path $path "bin\Rscript.exe"
+    if (Test-Path $rscriptPath) {
+        $R_SOURCE_DIR = $path
+        Write-Host "  Found R installation at: $R_SOURCE_DIR" -ForegroundColor Green
+        break
     }
+}
+
+if (-not $R_SOURCE_DIR) {
+    Write-Host "  ERROR: Could not locate R installation (bin\Rscript.exe not found)" -ForegroundColor Red
+    Write-Host "  Searched paths:" -ForegroundColor Red
+    foreach ($path in $searchPaths) {
+        Write-Host "    $path" -ForegroundColor Red
+    }
+    exit 1
 }
 
 Write-Host "  Source: $R_SOURCE_DIR" -ForegroundColor Gray
 Write-Host "  Destination: $BUNDLED_DIR" -ForegroundColor Gray
 
 # Copy essential directories
-Copy-Item -Path (Join-Path $R_SOURCE_DIR "bin") -Destination (Join-Path $BUNDLED_DIR "bin") -Recurse -Force
-Copy-Item -Path (Join-Path $R_SOURCE_DIR "library") -Destination (Join-Path $BUNDLED_DIR "library") -Recurse -Force
-Copy-Item -Path (Join-Path $R_SOURCE_DIR "etc") -Destination (Join-Path $BUNDLED_DIR "etc") -Recurse -Force
-Copy-Item -Path (Join-Path $R_SOURCE_DIR "share") -Destination (Join-Path $BUNDLED_DIR "share") -Recurse -Force
-Copy-Item -Path (Join-Path $R_SOURCE_DIR "include") -Destination (Join-Path $BUNDLED_DIR "include") -Recurse -Force
-
-# Copy modules if they exist
-if (Test-Path (Join-Path $R_SOURCE_DIR "modules")) {
-    Copy-Item -Path (Join-Path $R_SOURCE_DIR "modules") -Destination (Join-Path $BUNDLED_DIR "modules") -Recurse -Force
+$dirsToCheck = @("bin", "library", "etc", "share", "include", "modules")
+foreach ($dir in $dirsToCheck) {
+    $sourcePath = Join-Path $R_SOURCE_DIR $dir
+    if (Test-Path $sourcePath) {
+        Write-Host "  Copying $dir..." -ForegroundColor Gray
+        Copy-Item -Path $sourcePath -Destination (Join-Path $BUNDLED_DIR $dir) -Recurse -Force
+    } else {
+        Write-Host "  Skipping $dir (not found)" -ForegroundColor Yellow
+    }
 }
 
 Write-Host "  Copy complete" -ForegroundColor Gray

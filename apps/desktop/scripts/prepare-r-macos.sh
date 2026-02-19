@@ -65,9 +65,18 @@ cd "$TEMP_DIR"
 pkgutil --expand "$R_PKG" R-expanded
 
 # Find R-framework.pkg specifically
-R_FRAMEWORK_PKG="R-expanded/R-framework.pkg"
-if [[ ! -d "$R_FRAMEWORK_PKG" ]]; then
-    echo "Error: R-framework.pkg not found in expanded package"
+# Try common variations: R-fw.pkg, R-framework.pkg, r-framework.pkg
+R_FRAMEWORK_PKG=""
+for pkg_name in "R-fw.pkg" "R-framework.pkg" "r-framework.pkg" "R-Framework.pkg"; do
+    if [[ -d "R-expanded/$pkg_name" ]]; then
+        R_FRAMEWORK_PKG="R-expanded/$pkg_name"
+        echo "Found framework package: $pkg_name"
+        break
+    fi
+done
+
+if [[ -z "$R_FRAMEWORK_PKG" ]]; then
+    echo "Error: R framework package not found in expanded package"
     echo "Available packages:"
     ls -la R-expanded/
     exit 1
