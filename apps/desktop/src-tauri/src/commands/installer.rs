@@ -340,17 +340,31 @@ pub async fn install_python_packages() -> Result<String, String> {
 
     let packages: Vec<&str> = PYTHON_REQUIRED_PACKAGES.to_vec();
 
-    let result = Command::new(&python_path)
-        .args(["-m", "pip", "install", "--user"])
-        .args(&packages)
-        .output()
+    // Build pip install command with SSL workaround for Windows
+    let mut cmd = Command::new(&python_path);
+    cmd.args(["-m", "pip", "install", "--user"]);
+
+    // Add trusted hosts to bypass SSL issues on Windows
+    #[cfg(target_os = "windows")]
+    {
+        cmd.args([
+            "--trusted-host", "pypi.org",
+            "--trusted-host", "pypi.python.org",
+            "--trusted-host", "files.pythonhosted.org",
+        ]);
+    }
+
+    cmd.args(&packages);
+
+    let result = cmd.output()
         .map_err(|e| format!("Failed to run pip: {}", e))?;
 
     if result.status.success() {
         Ok("Python packages installed successfully".to_string())
     } else {
         let stderr = String::from_utf8_lossy(&result.stderr);
-        Err(format!("Failed to install Python packages: {}", stderr))
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        Err(format!("Failed to install Python packages:\n{}\n{}", stderr, stdout))
     }
 }
 
