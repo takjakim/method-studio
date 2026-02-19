@@ -47,9 +47,6 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
-    },
-    "linux": {
-      "desktopTemplate": null
     }
   },
   "plugins": {
