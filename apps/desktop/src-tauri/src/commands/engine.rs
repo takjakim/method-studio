@@ -271,14 +271,17 @@ fn engines_dir(app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf, String>
     // First, try Tauri's resource directory (for bundled apps)
     if let Some(handle) = app_handle {
         if let Ok(resource_path) = handle.path().resource_dir() {
+            // Check for bundled resources with _up_ prefix structure
+            // (Tauri bundles ../../../engines as _up_/_up_/_up_/engines)
+            let bundled_engines = resource_path.join("_up_").join("_up_").join("_up_").join("engines");
+            if bundled_engines.is_dir() {
+                return Ok(bundled_engines);
+            }
+
+            // Check direct engines directory
             let engines = resource_path.join("engines");
             if engines.is_dir() {
                 return Ok(engines);
-            }
-            // Also check directly in resource dir (flat structure)
-            let r_wrapper = resource_path.join("engines").join("r-scripts").join("wrapper.R");
-            if r_wrapper.exists() {
-                return Ok(resource_path.join("engines"));
             }
         }
     }
