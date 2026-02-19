@@ -1,7 +1,106 @@
 // Commands for checking and installing R/Python
 
 use std::process::Command;
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+
+/// Find Rscript executable, checking common installation paths
+fn find_rscript() -> Option<PathBuf> {
+    // Try PATH first
+    if let Ok(output) = Command::new("Rscript").arg("--version").output() {
+        if output.status.success() {
+            return Some(PathBuf::from("Rscript"));
+        }
+    }
+
+    // Common R installation paths on macOS
+    #[cfg(target_os = "macos")]
+    {
+        let paths = [
+            "/usr/local/bin/Rscript",
+            "/opt/homebrew/bin/Rscript",
+            "/Library/Frameworks/R.framework/Versions/Current/Resources/bin/Rscript",
+            "/opt/R/arm64/bin/Rscript",
+            "/opt/R/x86_64/bin/Rscript",
+        ];
+        for path in paths {
+            let p = PathBuf::from(path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // Common R installation paths on Windows
+    #[cfg(target_os = "windows")]
+    {
+        // Check common R installation directories
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            let r_dir = PathBuf::from(&program_files).join("R");
+            if r_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&r_dir) {
+                    for entry in entries.flatten() {
+                        let rscript = entry.path().join("bin").join("Rscript.exe");
+                        if rscript.exists() {
+                            return Some(rscript);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Find Python executable, checking common installation paths
+fn find_python() -> Option<PathBuf> {
+    let cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
+
+    // Try PATH first
+    if let Ok(output) = Command::new(cmd).arg("--version").output() {
+        if output.status.success() {
+            return Some(PathBuf::from(cmd));
+        }
+    }
+
+    // Common Python installation paths on macOS
+    #[cfg(target_os = "macos")]
+    {
+        let paths = [
+            "/usr/local/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/usr/bin/python3",
+            "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+        ];
+        for path in paths {
+            let p = PathBuf::from(path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // Common Python installation paths on Windows
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            let python_dir = PathBuf::from(&local_app_data).join("Programs").join("Python");
+            if python_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&python_dir) {
+                    for entry in entries.flatten() {
+                        let python = entry.path().join("python.exe");
+                        if python.exists() {
+                            return Some(python);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EngineInstallStatus {
@@ -23,36 +122,45 @@ const PYTHON_REQUIRED_PACKAGES: &[&str] = &["pandas", "numpy", "scipy", "statsmo
 #[tauri::command]
 pub async fn check_install_status() -> Result<EngineInstallStatus, String> {
     // Check R installation
-    let r_check = Command::new("Rscript").arg("--version").output();
-    let (r_installed, r_version) = match r_check {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            (true, Some(version))
+    let rscript_path = find_rscript();
+    let (r_installed, r_version) = if let Some(ref path) = rscript_path {
+        let r_check = Command::new(path).arg("--version").output();
+        match r_check {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                (true, Some(version))
+            }
+            _ => (false, None),
         }
-        _ => (false, None),
+    } else {
+        (false, None)
     };
 
     // Check R packages
-    let (r_packages_installed, r_missing_packages) = if r_installed {
-        check_r_packages_internal()
+    let (r_packages_installed, r_missing_packages) = if let Some(ref path) = rscript_path {
+        check_r_packages_internal(path)
     } else {
         (false, R_REQUIRED_PACKAGES.iter().map(|s| s.to_string()).collect())
     };
 
     // Check Python installation
-    let py_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
-    let py_check = Command::new(py_cmd).arg("--version").output();
-    let (python_installed, python_version) = match py_check {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            (true, Some(version))
+    let python_path = find_python();
+    let (python_installed, python_version) = if let Some(ref path) = python_path {
+        let py_check = Command::new(path).arg("--version").output();
+        match py_check {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                (true, Some(version))
+            }
+            _ => (false, None),
         }
-        _ => (false, None),
+    } else {
+        (false, None)
     };
 
     // Check Python packages
-    let (python_packages_installed, python_missing_packages) = if python_installed {
-        check_python_packages_internal()
+    let (python_packages_installed, python_missing_packages) = if let Some(ref path) = python_path {
+        check_python_packages_internal(path)
     } else {
         (false, PYTHON_REQUIRED_PACKAGES.iter().map(|s| s.to_string()).collect())
     };
@@ -85,7 +193,7 @@ pub async fn check_install_status() -> Result<EngineInstallStatus, String> {
     })
 }
 
-fn check_r_packages_internal() -> (bool, Vec<String>) {
+fn check_r_packages_internal(rscript_path: &PathBuf) -> (bool, Vec<String>) {
     let mut missing = Vec::new();
 
     for pkg in R_REQUIRED_PACKAGES {
@@ -93,7 +201,7 @@ fn check_r_packages_internal() -> (bool, Vec<String>) {
             "if (!requireNamespace('{}', quietly = TRUE)) quit(status = 1)",
             pkg
         );
-        let result = Command::new("Rscript")
+        let result = Command::new(rscript_path)
             .args(["-e", &check_script])
             .output();
 
@@ -106,8 +214,7 @@ fn check_r_packages_internal() -> (bool, Vec<String>) {
     (missing.is_empty(), missing)
 }
 
-fn check_python_packages_internal() -> (bool, Vec<String>) {
-    let py_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
+fn check_python_packages_internal(python_path: &PathBuf) -> (bool, Vec<String>) {
     let mut missing = Vec::new();
 
     for pkg in PYTHON_REQUIRED_PACKAGES {
@@ -115,7 +222,7 @@ fn check_python_packages_internal() -> (bool, Vec<String>) {
             "import importlib.util; exit(0 if importlib.util.find_spec('{}') else 1)",
             pkg
         );
-        let result = Command::new(py_cmd)
+        let result = Command::new(python_path)
             .args(["-c", &check_script])
             .output();
 
@@ -204,13 +311,16 @@ pub async fn install_python() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn install_r_packages() -> Result<String, String> {
+    let rscript_path = find_rscript()
+        .ok_or_else(|| "Rscript not found. Please install R first.".to_string())?;
+
     let packages_str = R_REQUIRED_PACKAGES.join("', '");
     let install_script = format!(
         "install.packages(c('{}'), repos = 'https://cloud.r-project.org/')",
         packages_str
     );
 
-    let result = Command::new("Rscript")
+    let result = Command::new(&rscript_path)
         .args(["-e", &install_script])
         .output()
         .map_err(|e| format!("Failed to run Rscript: {}", e))?;
@@ -225,10 +335,12 @@ pub async fn install_r_packages() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn install_python_packages() -> Result<String, String> {
-    let py_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
+    let python_path = find_python()
+        .ok_or_else(|| "Python not found. Please install Python first.".to_string())?;
+
     let packages: Vec<&str> = PYTHON_REQUIRED_PACKAGES.to_vec();
 
-    let result = Command::new(py_cmd)
+    let result = Command::new(&python_path)
         .args(["-m", "pip", "install", "--user"])
         .args(&packages)
         .output()
