@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 /// Find Rscript executable, checking common installation paths
-fn find_rscript() -> Option<PathBuf> {
+pub fn find_rscript() -> Option<PathBuf> {
     // Try PATH first
     if let Ok(output) = Command::new("Rscript").arg("--version").output() {
         if output.status.success() {
@@ -54,7 +54,7 @@ fn find_rscript() -> Option<PathBuf> {
 }
 
 /// Find Python executable, checking common installation paths
-fn find_python() -> Option<PathBuf> {
+pub fn find_python() -> Option<PathBuf> {
     let cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
 
     // Try PATH first

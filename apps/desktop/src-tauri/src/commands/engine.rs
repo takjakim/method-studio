@@ -7,6 +7,8 @@ use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
+use super::installer::{find_rscript, find_python};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EngineResult {
     pub stdout: String,
@@ -310,7 +312,14 @@ fn engines_dir(app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf, String>
         .map(|p| p.join("engines"))
         .ok_or_else(|| "Cannot locate engines/ directory".to_string())?;
 
-    Ok(fallback)
+    if fallback.is_dir() {
+        Ok(fallback)
+    } else {
+        Err(format!(
+            "Cannot locate engines/ directory. Checked paths include: {}",
+            fallback.display()
+        ))
+    }
 }
 
 /// Convert the Vec<Value> rows into the columnar data map the R wrapper expects:
@@ -428,7 +437,9 @@ fn run_with_r_wrapper(
     println!("==========================");
 
     // Spawn wrapper, pipe JSON to stdin, collect stdout.
-    let mut child = Command::new("Rscript")
+    let rscript_cmd = find_rscript()
+        .ok_or_else(|| "Rscript not found. Please install R first.".to_string())?;
+    let mut child = Command::new(&rscript_cmd)
         .arg(wrapper_path.to_str().unwrap_or("wrapper.R"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -577,13 +588,10 @@ fn run_with_python_wrapper(
     println!("Data keys: {:?}", data_map.keys().collect::<Vec<_>>());
     println!("===============================");
 
-    let python_cmd = if cfg!(target_os = "windows") {
-        "python"
-    } else {
-        "python3"
-    };
+    let python_cmd = find_python()
+        .ok_or_else(|| "Python not found. Please install Python first.".to_string())?;
 
-    let mut child = Command::new(python_cmd)
+    let mut child = Command::new(&python_cmd)
         .arg(wrapper_path.to_str().unwrap_or("wrapper.py"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -722,7 +730,10 @@ pub struct EngineStatus {
 
 #[tauri::command]
 pub async fn run_r_script(script: String) -> Result<EngineResult, String> {
-    let output = Command::new("Rscript")
+    let rscript_cmd = find_rscript()
+        .ok_or_else(|| "Rscript not found. Please install R first.".to_string())?;
+
+    let output = Command::new(&rscript_cmd)
         .arg("-e")
         .arg(&script)
         .output()
@@ -738,13 +749,10 @@ pub async fn run_r_script(script: String) -> Result<EngineResult, String> {
 
 #[tauri::command]
 pub async fn run_python_script(script: String) -> Result<EngineResult, String> {
-    let python_cmd = if cfg!(target_os = "windows") {
-        "python"
-    } else {
-        "python3"
-    };
+    let python_cmd = find_python()
+        .ok_or_else(|| "Python not found. Please install Python first.".to_string())?;
 
-    let output = Command::new(python_cmd)
+    let output = Command::new(&python_cmd)
         .arg("-c")
         .arg(&script)
         .output()
@@ -760,21 +768,22 @@ pub async fn run_python_script(script: String) -> Result<EngineResult, String> {
 
 #[tauri::command]
 pub async fn check_engine_status() -> Result<EngineStatus, String> {
-    let r_output = Command::new("Rscript")
-        .arg("--version")
-        .output()
-        .ok();
+    let rscript_path = find_rscript();
+    let python_path = find_python();
 
-    let python_cmd = if cfg!(target_os = "windows") {
-        "python"
-    } else {
-        "python3"
-    };
+    let r_output = rscript_path.as_ref().and_then(|p| {
+        Command::new(p)
+            .arg("--version")
+            .output()
+            .ok()
+    });
 
-    let python_output = Command::new(python_cmd)
-        .arg("--version")
-        .output()
-        .ok();
+    let python_output = python_path.as_ref().and_then(|p| {
+        Command::new(p)
+            .arg("--version")
+            .output()
+            .ok()
+    });
 
     let r_available = r_output.as_ref().map(|o| o.status.success()).unwrap_or(false);
     let python_available = python_output.as_ref().map(|o| o.status.success()).unwrap_or(false);
