@@ -41,9 +41,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: apps/desktop/bundled-engines/${{ matrix.name }}
-          key: bundled-engines-${{ matrix.name }}-r4.4.2-py3.12.8-${{ hashFiles('apps/desktop/scripts/prepare-*.sh', 'apps/desktop/scripts/prepare-*.ps1') }}
+          key: bundled-engines-${{ matrix.name }}-r4.5.2-py3.12.8-${{ hashFiles('apps/desktop/scripts/prepare-*.sh', 'apps/desktop/scripts/prepare-*.ps1') }}
           restore-keys: |
-            bundled-engines-${{ matrix.name }}-r4.4.2-py3.12.8-
+            bundled-engines-${{ matrix.name }}-r4.5.2-py3.12.8-
 
       - name: Prepare R engine (macOS)
         id: prepare-r-macos

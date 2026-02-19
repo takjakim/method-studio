@@ -13,7 +13,7 @@ if [[ "$ARCH" == "arm64" ]] || [[ "$ARCH" == "aarch64" ]]; then
     R_ARCH="arm64"
     R_VARIANT="arm64"
 elif [[ "$ARCH" == "x86_64" ]] || [[ "$ARCH" == "amd64" ]]; then
-    ARCH="x86_64"
+    ARCH="x64"
     R_ARCH="x86_64"
     R_VARIANT="x86_64"
 else
@@ -24,7 +24,7 @@ fi
 echo "Architecture: $ARCH"
 
 # Configuration
-R_VERSION="4.4.2"
+R_VERSION="4.5.2"
 R_PKG_URL="https://cran.r-project.org/bin/macosx/big-sur-${R_VARIANT}/base/R-${R_VERSION}-${R_VARIANT}.pkg"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -64,19 +64,22 @@ cd "$TEMP_DIR"
 # Use pkgutil to expand the pkg
 pkgutil --expand "$R_PKG" R-expanded
 
-# Find and extract the R.framework payload
-PAYLOAD_FILE=$(find R-expanded -name "Payload" | grep -i "r-framework" | head -n 1)
-if [[ -z "$PAYLOAD_FILE" ]]; then
-    # Try alternative path
-    PAYLOAD_FILE=$(find R-expanded -name "Payload" | head -n 1)
-fi
-
-if [[ -z "$PAYLOAD_FILE" ]]; then
-    echo "Error: Could not find Payload in package"
+# Find R-framework.pkg specifically
+R_FRAMEWORK_PKG="R-expanded/R-framework.pkg"
+if [[ ! -d "$R_FRAMEWORK_PKG" ]]; then
+    echo "Error: R-framework.pkg not found in expanded package"
+    echo "Available packages:"
+    ls -la R-expanded/
     exit 1
 fi
 
-echo "Extracting payload: $PAYLOAD_FILE"
+PAYLOAD_FILE="$R_FRAMEWORK_PKG/Payload"
+if [[ ! -f "$PAYLOAD_FILE" ]]; then
+    echo "Error: Payload not found in R-framework.pkg"
+    exit 1
+fi
+
+echo "Extracting R-framework.pkg payload: $PAYLOAD_FILE"
 mkdir -p R-extracted
 cd R-extracted
 cat "../$PAYLOAD_FILE" | gunzip -dc | cpio -i

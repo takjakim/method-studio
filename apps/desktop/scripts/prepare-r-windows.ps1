@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$R_VERSION = "4.4.2"
+$R_VERSION = "4.5.2"
 $R_DOWNLOAD_URL = "https://cran.r-project.org/bin/windows/base/R-$R_VERSION-win.exe"
 $SCRIPT_DIR = $PSScriptRoot
 $PROJECT_ROOT = Split-Path -Parent $SCRIPT_DIR
