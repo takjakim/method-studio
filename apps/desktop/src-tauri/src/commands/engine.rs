@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Manager;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EngineResult {
@@ -262,16 +263,27 @@ fn generate_script_summary(
     }
 }
 
-/// Locate the engines directory relative to the Tauri binary.
+/// Locate the engines directory.
 ///
-/// During development the binary lives at:
-///   <workspace>/apps/desktop/src-tauri/target/debug/method-studio
-/// so going up 5 levels reaches the workspace root and then into engines/.
-///
-/// In a bundled app the binary is inside the .app bundle; the engines are
-/// expected to be shipped alongside at ../../engines/ relative to the binary.
-fn engines_dir() -> Result<PathBuf, String> {
-    // Walk up from the executable until we find the engines/ sibling directory.
+/// In development: looks for engines/ by traversing up from the executable.
+/// In production: uses Tauri's resource directory where scripts are bundled.
+fn engines_dir(app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf, String> {
+    // First, try Tauri's resource directory (for bundled apps)
+    if let Some(handle) = app_handle {
+        if let Ok(resource_path) = handle.path().resource_dir() {
+            let engines = resource_path.join("engines");
+            if engines.is_dir() {
+                return Ok(engines);
+            }
+            // Also check directly in resource dir (flat structure)
+            let r_wrapper = resource_path.join("engines").join("r-scripts").join("wrapper.R");
+            if r_wrapper.exists() {
+                return Ok(resource_path.join("engines"));
+            }
+        }
+    }
+
+    // Fallback: Walk up from the executable (for development)
     let exe = std::env::current_exe()
         .map_err(|e| format!("Cannot determine executable path: {}", e))?;
 
@@ -288,7 +300,7 @@ fn engines_dir() -> Result<PathBuf, String> {
         }
     }
 
-    // Fallback: two levels up from binary (works for simple project layouts)
+    // Final fallback: two levels up from binary
     let fallback = exe
         .parent()
         .and_then(|p| p.parent())
@@ -663,11 +675,14 @@ fn run_with_python_wrapper(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn run_analysis(request: AnalysisRequest) -> Result<AnalysisResult, String> {
+pub async fn run_analysis(
+    app_handle: tauri::AppHandle,
+    request: AnalysisRequest,
+) -> Result<AnalysisResult, String> {
     let script_name = spec_to_script_name(&request.spec_id)?;
     let req_id = make_request_id();
 
-    let engines = engines_dir()?;
+    let engines = engines_dir(Some(&app_handle))?;
 
     match request.engine.to_lowercase().as_str() {
         "r" => {
