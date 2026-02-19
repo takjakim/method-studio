@@ -64,82 +64,118 @@ try {
     exit 1
 }
 
-# Step 3: Extract R installer (InnoSetup)
-Write-Host "[3/7] Extracting R installer..." -ForegroundColor Green
-$EXTRACT_DIR = Join-Path $TEMP_DIR "R-extracted"
+# Step 3: Install R using silent installation (NSIS installer)
+Write-Host "[3/7] Installing R using silent installation..." -ForegroundColor Green
+$R_INSTALL_DIR = Join-Path $TEMP_DIR "R-install"
 
 try {
-    # Use 7-Zip if available, otherwise use innounp or plain extraction
-    if (Get-Command "7z.exe" -ErrorAction SilentlyContinue) {
-        Write-Host "  Using 7-Zip for extraction..." -ForegroundColor Gray
-        & 7z.exe x $INSTALLER_PATH "-o$EXTRACT_DIR" -y | Out-Null
-    } else {
-        # Extract using silent install to temp location
-        Write-Host "  Using silent install method..." -ForegroundColor Gray
-        $R_INSTALL_DIR = Join-Path $TEMP_DIR "R-install"
-        & $INSTALLER_PATH /VERYSILENT /DIR=$R_INSTALL_DIR /NOICONS /TASKS="" | Out-Null
-        Start-Sleep -Seconds 5
+    Write-Host "  Running R installer with silent flags..." -ForegroundColor Gray
+    Write-Host "  Installation directory: $R_INSTALL_DIR" -ForegroundColor Gray
 
-        # Wait for installation to complete
-        $timeout = 120
-        $elapsed = 0
-        while (-not (Test-Path (Join-Path $R_INSTALL_DIR "bin\Rscript.exe")) -and $elapsed -lt $timeout) {
-            Start-Sleep -Seconds 2
-            $elapsed += 2
+    # Create installation directory
+    New-Item -ItemType Directory -Path $R_INSTALL_DIR -Force | Out-Null
+
+    # Run the installer with NSIS silent flags
+    # /S = Silent mode (NSIS standard)
+    # /D= specifies installation directory (must be last parameter)
+    $installArgs = @("/S", "/D=$R_INSTALL_DIR")
+    $installProcess = Start-Process -FilePath $INSTALLER_PATH -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
+
+    Write-Host "  Installer process completed with exit code: $($installProcess.ExitCode)" -ForegroundColor Gray
+
+    # Wait a few seconds for file system to settle
+    Start-Sleep -Seconds 3
+
+    # Wait for installation to complete by checking for Rscript.exe
+    Write-Host "  Waiting for installation to complete..." -ForegroundColor Gray
+    $timeout = 180  # 3 minutes timeout
+    $elapsed = 0
+    $rscriptPath = Join-Path $R_INSTALL_DIR "bin\Rscript.exe"
+
+    while (-not (Test-Path $rscriptPath) -and $elapsed -lt $timeout) {
+        Start-Sleep -Seconds 2
+        $elapsed += 2
+        if ($elapsed % 10 -eq 0) {
+            Write-Host "  Still waiting... ($elapsed seconds elapsed)" -ForegroundColor Gray
         }
-
-        if ($elapsed -ge $timeout) {
-            throw "Installation timeout - Rscript.exe not found"
-        }
-
-        $EXTRACT_DIR = $R_INSTALL_DIR
     }
 
-    Write-Host "  Extraction complete" -ForegroundColor Gray
+    if ($elapsed -ge $timeout) {
+        Write-Host "  ERROR: Installation timeout - Rscript.exe not found after $timeout seconds" -ForegroundColor Red
+        Write-Host "  Expected location: $rscriptPath" -ForegroundColor Red
+        Write-Host "  Directory contents:" -ForegroundColor Red
+        Get-ChildItem -Path $R_INSTALL_DIR -Recurse -Depth 2 | ForEach-Object {
+            Write-Host "    $($_.FullName)" -ForegroundColor Red
+        }
+        throw "Installation timeout - Rscript.exe not found"
+    }
+
+    Write-Host "  Installation complete - R installed to $R_INSTALL_DIR" -ForegroundColor Green
+    $EXTRACT_DIR = $R_INSTALL_DIR
+
 } catch {
-    Write-Host "  ERROR: Failed to extract R installer" -ForegroundColor Red
+    Write-Host "  ERROR: Failed to install R" -ForegroundColor Red
     Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  Installation directory: $R_INSTALL_DIR" -ForegroundColor Red
+    if (Test-Path $R_INSTALL_DIR) {
+        Write-Host "  Directory contents:" -ForegroundColor Red
+        Get-ChildItem -Path $R_INSTALL_DIR -Recurse -Depth 2 | ForEach-Object {
+            Write-Host "    $($_.FullName)" -ForegroundColor Red
+        }
+    }
     exit 1
 }
 
 # Step 4: Copy R to bundled directory
 Write-Host "[4/7] Copying R to bundled directory..." -ForegroundColor Green
 
-Write-Host "  Analyzing extraction structure..." -ForegroundColor Gray
-Write-Host "  Extracted directory contents:" -ForegroundColor Gray
-Get-ChildItem -Path $EXTRACT_DIR -Recurse -Depth 2 | ForEach-Object {
-    Write-Host "    $($_.FullName.Replace($EXTRACT_DIR, ''))" -ForegroundColor Gray
-}
+Write-Host "  Analyzing installation structure..." -ForegroundColor Gray
 
 # Find R directory by looking for bin/Rscript.exe
+# The silent installer should have created the R installation directly in $EXTRACT_DIR
 $R_SOURCE_DIR = $null
-$searchPaths = @(
-    $EXTRACT_DIR,
-    (Join-Path $EXTRACT_DIR "R-$R_VERSION"),
-    (Join-Path $EXTRACT_DIR "R")
-)
 
-# Also search for any R-* directories
-Get-ChildItem -Path $EXTRACT_DIR -Directory | Where-Object { $_.Name -match "^R-" } | ForEach-Object {
-    $searchPaths += $_.FullName
-}
-
-foreach ($path in $searchPaths) {
-    $rscriptPath = Join-Path $path "bin\Rscript.exe"
-    if (Test-Path $rscriptPath) {
-        $R_SOURCE_DIR = $path
-        Write-Host "  Found R installation at: $R_SOURCE_DIR" -ForegroundColor Green
-        break
+# Check if R was installed directly to $EXTRACT_DIR
+$rscriptPath = Join-Path $EXTRACT_DIR "bin\Rscript.exe"
+if (Test-Path $rscriptPath) {
+    $R_SOURCE_DIR = $EXTRACT_DIR
+    Write-Host "  Found R installation directly in install directory" -ForegroundColor Green
+} else {
+    # If not, search common subdirectory patterns
+    Write-Host "  Rscript.exe not found in expected location, searching subdirectories..." -ForegroundColor Yellow
+    Write-Host "  Directory contents:" -ForegroundColor Gray
+    Get-ChildItem -Path $EXTRACT_DIR -Recurse -Depth 2 | Select-Object -First 50 | ForEach-Object {
+        Write-Host "    $($_.FullName.Replace($EXTRACT_DIR, ''))" -ForegroundColor Gray
     }
-}
 
-if (-not $R_SOURCE_DIR) {
-    Write-Host "  ERROR: Could not locate R installation (bin\Rscript.exe not found)" -ForegroundColor Red
-    Write-Host "  Searched paths:" -ForegroundColor Red
+    $searchPaths = @(
+        (Join-Path $EXTRACT_DIR "R-$R_VERSION"),
+        (Join-Path $EXTRACT_DIR "R")
+    )
+
+    # Also search for any R-* directories
+    Get-ChildItem -Path $EXTRACT_DIR -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "^R-" } | ForEach-Object {
+        $searchPaths += $_.FullName
+    }
+
     foreach ($path in $searchPaths) {
-        Write-Host "    $path" -ForegroundColor Red
+        $testPath = Join-Path $path "bin\Rscript.exe"
+        if (Test-Path $testPath) {
+            $R_SOURCE_DIR = $path
+            Write-Host "  Found R installation at: $R_SOURCE_DIR" -ForegroundColor Green
+            break
+        }
     }
-    exit 1
+
+    if (-not $R_SOURCE_DIR) {
+        Write-Host "  ERROR: Could not locate R installation (bin\Rscript.exe not found)" -ForegroundColor Red
+        Write-Host "  Searched paths:" -ForegroundColor Red
+        foreach ($path in $searchPaths) {
+            Write-Host "    $path" -ForegroundColor Red
+        }
+        Write-Host "  Expected location: $rscriptPath" -ForegroundColor Red
+        exit 1
+    }
 }
 
 Write-Host "  Source: $R_SOURCE_DIR" -ForegroundColor Gray
@@ -168,8 +204,21 @@ if (-not (Test-Path $RSCRIPT_PATH)) {
     exit 1
 }
 
+# Test Rscript execution before proceeding
+Write-Host "  Testing R installation..." -ForegroundColor Gray
+try {
+    $testOutput = & $RSCRIPT_PATH --version 2>&1
+    Write-Host "    R version: $testOutput" -ForegroundColor Gray
+} catch {
+    Write-Host "  ERROR: Rscript.exe failed to execute" -ForegroundColor Red
+    Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  Path: $RSCRIPT_PATH" -ForegroundColor Red
+    exit 1
+}
+
 # Set R_LIBS to the bundled library
 $env:R_LIBS = Join-Path $BUNDLED_DIR "library"
+Write-Host "  R_LIBS set to: $env:R_LIBS" -ForegroundColor Gray
 
 foreach ($package in $REQUIRED_PACKAGES) {
     Write-Host "  Installing $package..." -ForegroundColor Gray

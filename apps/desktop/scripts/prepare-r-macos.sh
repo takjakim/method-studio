@@ -132,6 +132,25 @@ fi
 
 # Set up R_HOME for portable use
 echo "Configuring portable R_HOME..."
+
+# Debug: Show what was actually copied
+echo "Debug: Checking copied files..."
+echo "  Contents of $OUTPUT_DIR/bin/:"
+ls -la "$OUTPUT_DIR/bin/" 2>/dev/null || echo "    Directory is empty or doesn't exist"
+echo "  Contents of $OUTPUT_DIR/lib/R/bin/:"
+ls -la "$OUTPUT_DIR/lib/R/bin/" 2>/dev/null || echo "    Directory is empty or doesn't exist"
+
+# Make original binaries executable if they exist
+if [[ -f "$OUTPUT_DIR/bin/R" ]]; then
+    chmod +x "$OUTPUT_DIR/bin/R"
+    echo "  Made $OUTPUT_DIR/bin/R executable"
+fi
+if [[ -f "$OUTPUT_DIR/bin/Rscript" ]]; then
+    chmod +x "$OUTPUT_DIR/bin/Rscript"
+    echo "  Made $OUTPUT_DIR/bin/Rscript executable"
+fi
+
+# Create wrapper scripts that set R_HOME correctly
 cat > "$OUTPUT_DIR/bin/R-wrapper" << 'EOF'
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -150,9 +169,7 @@ exec "$R_HOME/bin/Rscript" "$@"
 EOF
 chmod +x "$OUTPUT_DIR/bin/Rscript-wrapper"
 
-# Make original binaries executable
-chmod +x "$OUTPUT_DIR/bin/R" 2>/dev/null || true
-chmod +x "$OUTPUT_DIR/bin/Rscript" 2>/dev/null || true
+echo "  Created wrapper scripts with R_HOME configuration"
 
 # Remove unnecessary files to reduce size
 echo ""
@@ -168,14 +185,49 @@ find "$OUTPUT_DIR/lib/R" -name "*.html" -delete 2>/dev/null || true
 # Install required R packages
 echo ""
 echo "=== Installing required R packages ==="
+
+# Set R_HOME and R_LIBS_USER for package installation
 export R_HOME="$OUTPUT_DIR/lib/R"
 export R_LIBS_USER="$OUTPUT_DIR/library"
 
-RSCRIPT="$OUTPUT_DIR/bin/Rscript"
-if [[ ! -f "$RSCRIPT" ]]; then
-    echo "Error: Rscript not found at $RSCRIPT"
+# Try to use the wrapper script first, fall back to direct Rscript if needed
+if [[ -f "$OUTPUT_DIR/bin/Rscript-wrapper" ]]; then
+    RSCRIPT="$OUTPUT_DIR/bin/Rscript-wrapper"
+    echo "Using Rscript wrapper at: $RSCRIPT"
+elif [[ -f "$OUTPUT_DIR/bin/Rscript" ]]; then
+    RSCRIPT="$OUTPUT_DIR/bin/Rscript"
+    echo "Using direct Rscript at: $RSCRIPT"
+elif [[ -f "$OUTPUT_DIR/lib/R/bin/Rscript" ]]; then
+    RSCRIPT="$OUTPUT_DIR/lib/R/bin/Rscript"
+    echo "Using Rscript from lib/R/bin at: $RSCRIPT"
+else
+    echo "Error: Rscript not found in any expected location"
+    echo "Searched locations:"
+    echo "  - $OUTPUT_DIR/bin/Rscript-wrapper"
+    echo "  - $OUTPUT_DIR/bin/Rscript"
+    echo "  - $OUTPUT_DIR/lib/R/bin/Rscript"
     exit 1
 fi
+
+# Make sure the script is executable
+chmod +x "$RSCRIPT"
+
+# Test R installation before proceeding
+echo "Testing R installation..."
+if ! "$RSCRIPT" --version >/dev/null 2>&1; then
+    echo "Error: Rscript failed to execute"
+    echo "Trying to get more information..."
+    "$RSCRIPT" --version 2>&1 || true
+    echo ""
+    echo "R_HOME is set to: $R_HOME"
+    echo "Checking if R_HOME exists: $(test -d "$R_HOME" && echo "YES" || echo "NO")"
+    if [[ -d "$R_HOME" ]]; then
+        echo "R_HOME contents:"
+        ls -la "$R_HOME" | head -20
+    fi
+    exit 1
+fi
+echo "R installation test passed"
 
 PACKAGES=(
     "jsonlite"
