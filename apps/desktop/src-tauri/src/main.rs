@@ -17,6 +17,8 @@ fn main() {
             commands::installer::check_install_status,
             commands::installer::install_r,
             commands::installer::install_python,
+            commands::installer::install_r_packages,
+            commands::installer::install_python_packages,
             commands::installer::install_homebrew,
         ])
         .run(tauri::generate_context!())

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BlockOutputViewer as OutputViewer } from '../../components/output/BlockOutputViewer';
 import { useOutputStore, type OutputSession } from '../../stores/output-store';
 import { useSyntaxStore } from '../../stores/syntax-store';
+import { useDataStore } from '../../stores/data-store';
 
 type ViewTab = 'output' | 'script';
 
@@ -50,6 +51,15 @@ export default function ResultsPage() {
   const [viewTab, setViewTab] = useState<ViewTab>('output');
   const [scriptViewMode, setScriptViewMode] = useState<'summary' | 'full'>('summary');
   const [copied, setCopied] = useState(false);
+  const [showLabels, setShowLabels] = useState(() => {
+    const saved = localStorage.getItem('method-studio-show-labels');
+    return saved === 'true';
+  });
+
+  // Save showLabels preference
+  useEffect(() => {
+    localStorage.setItem('method-studio-show-labels', String(showLabels));
+  }, [showLabels]);
 
   // Output store
   const sessions = useOutputStore((state) => state.sessions);
@@ -64,6 +74,17 @@ export default function ResultsPage() {
   // Syntax store
   const scripts = useSyntaxStore((state) => state.scripts);
   const clearScripts = useSyntaxStore((state) => state.clearScripts);
+
+  // Data store - for variable labels
+  const dataset = useDataStore((state) => state.dataset);
+  const variableLabels: Record<string, string> = {};
+  if (dataset) {
+    dataset.variables.forEach((v) => {
+      if (v.label) {
+        variableLabels[v.name] = v.label;
+      }
+    });
+  }
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) ?? sessions[sessions.length - 1];
 
@@ -105,7 +126,23 @@ export default function ResultsPage() {
             {isLoading ? t('results.loading') : `${sessions.length} analysis results`}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Show Labels Toggle */}
+          <label
+            className="flex items-center gap-2 px-3 py-1.5 text-xs rounded border cursor-pointer hover:bg-gray-50"
+            style={{
+              borderColor: 'var(--color-border)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showLabels}
+              onChange={(e) => setShowLabels(e.target.checked)}
+              className="w-3 h-3"
+            />
+            {t('results.showLabels')}
+          </label>
           {selectedSession && (
             <button
               onClick={handleExport}
@@ -272,7 +309,11 @@ export default function ResultsPage() {
                   {/* Content based on selected tab */}
                   <div className="flex-1 overflow-auto">
                     {viewTab === 'output' ? (
-                      <OutputViewer blocks={blocks} />
+                      <OutputViewer
+                        blocks={blocks}
+                        showLabels={showLabels}
+                        variableLabels={variableLabels}
+                      />
                     ) : (
                       <div className="flex flex-col h-full">
                         {/* Syntax toolbar */}

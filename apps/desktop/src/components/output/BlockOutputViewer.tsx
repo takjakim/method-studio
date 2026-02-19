@@ -3,6 +3,24 @@ import { ProcessDiagram } from './ProcessDiagram';
 
 export interface BlockOutputViewerProps {
   blocks: TypedOutputBlock[];
+  showLabels?: boolean;
+  variableLabels?: Record<string, string>;
+}
+
+// Helper function to replace variable names with labels in text
+function replaceWithLabels(text: string, labels: Record<string, string>): string {
+  let result = text;
+  // Sort by length (longest first) to avoid partial replacements
+  const sortedNames = Object.keys(labels).sort((a, b) => b.length - a.length);
+  for (const name of sortedNames) {
+    const label = labels[name];
+    if (label) {
+      // Replace whole word matches only
+      const regex = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+      result = result.replace(regex, label);
+    }
+  }
+  return result;
 }
 
 function TitleBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 'title' | 'subtitle' }> }) {
@@ -20,12 +38,33 @@ function TitleBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 't
   );
 }
 
-function TableBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 'table' }> }) {
+function TableBlockView({
+  block,
+  showLabels,
+  variableLabels,
+}: {
+  block: Extract<TypedOutputBlock, { type: 'table' }>;
+  showLabels?: boolean;
+  variableLabels?: Record<string, string>;
+}) {
   const table = block.content as TableOutput;
+
+  // Helper to get display text (label or original)
+  const getDisplayText = (text: string | number | null | undefined): string => {
+    if (text == null) return '';
+    const str = String(text);
+    if (showLabels && variableLabels) {
+      return replaceWithLabels(str, variableLabels);
+    }
+    return str;
+  };
+
   return (
     <div className="my-3">
       {table.title && (
-        <p className="text-xs italic text-gray-800 mb-1 font-medium">{table.title}</p>
+        <p className="text-xs italic text-gray-800 mb-1 font-medium">
+          {getDisplayText(table.title)}
+        </p>
       )}
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
@@ -36,7 +75,7 @@ function TableBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 't
                   key={i}
                   className="py-1 px-2 font-semibold text-gray-800 bg-white text-right first:text-left"
                 >
-                  {h}
+                  {getDisplayText(h)}
                 </th>
               ))}
             </tr>
@@ -47,7 +86,7 @@ function TableBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 't
                     key={i}
                     className="py-0.5 px-2 font-medium text-gray-600 bg-white text-right first:text-left text-[11px]"
                   >
-                    {h}
+                    {getDisplayText(h)}
                   </th>
                 ))}
               </tr>
@@ -61,7 +100,8 @@ function TableBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 't
                     key={ci}
                     className="py-0.5 px-2 text-gray-800 text-right first:text-left tabular-nums"
                   >
-                    {cell ?? ''}
+                    {/* Only apply labels to first column (usually variable names) */}
+                    {ci === 0 ? getDisplayText(cell) : (cell ?? '')}
                   </td>
                 ))}
               </tr>
@@ -72,7 +112,7 @@ function TableBlockView({ block }: { block: Extract<TypedOutputBlock, { type: 't
               <tr>
                 <td colSpan={table.headers.length} className="pt-1 text-[10px] text-gray-500 italic">
                   {table.footnotes.map((f, i) => (
-                    <div key={i}>{f}</div>
+                    <div key={i}>{getDisplayText(f)}</div>
                   ))}
                 </td>
               </tr>
@@ -150,7 +190,7 @@ function ProcessDiagramBlockView({ block }: { block: Extract<TypedOutputBlock, {
   );
 }
 
-export function BlockOutputViewer({ blocks }: BlockOutputViewerProps) {
+export function BlockOutputViewer({ blocks, showLabels, variableLabels }: BlockOutputViewerProps) {
   if (blocks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[120px] text-gray-400 select-none">
@@ -180,7 +220,14 @@ export function BlockOutputViewer({ blocks }: BlockOutputViewerProps) {
           case 'subtitle':
             return <TitleBlockView key={block.id} block={block} />;
           case 'table':
-            return <TableBlockView key={block.id} block={block} />;
+            return (
+              <TableBlockView
+                key={block.id}
+                block={block}
+                showLabels={showLabels}
+                variableLabels={variableLabels}
+              />
+            );
           case 'plot':
             return <PlotBlockView key={block.id} block={block} />;
           case 'text':

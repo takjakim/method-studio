@@ -90,7 +90,8 @@
     "scriptSummary": "Summary",
     "scriptFull": "Full",
     "success": "Success",
-    "error": "Error"
+    "error": "Error",
+    "showLabels": "Show Labels"
   },
   "categories": {
     "descriptiveStatistics": "Descriptive Statistics",

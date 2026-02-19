@@ -90,7 +90,8 @@
     "scriptSummary": "요약",
     "scriptFull": "전체",
     "success": "성공",
-    "error": "오류"
+    "error": "오류",
+    "showLabels": "라벨 표시"
   },
   "categories": {
     "descriptiveStatistics": "기술통계",

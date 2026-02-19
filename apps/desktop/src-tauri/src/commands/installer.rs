@@ -7,11 +7,18 @@ use serde::{Deserialize, Serialize};
 pub struct EngineInstallStatus {
     pub r_installed: bool,
     pub r_version: Option<String>,
+    pub r_packages_installed: bool,
+    pub r_missing_packages: Vec<String>,
     pub python_installed: bool,
     pub python_version: Option<String>,
+    pub python_packages_installed: bool,
+    pub python_missing_packages: Vec<String>,
     pub homebrew_installed: bool,  // macOS only
     pub winget_available: bool,    // Windows only
 }
+
+const R_REQUIRED_PACKAGES: &[&str] = &["jsonlite", "psych", "lavaan", "lme4", "boot", "mediation"];
+const PYTHON_REQUIRED_PACKAGES: &[&str] = &["pandas", "numpy", "scipy", "statsmodels", "semopy", "factor_analyzer", "pingouin"];
 
 #[tauri::command]
 pub async fn check_install_status() -> Result<EngineInstallStatus, String> {
@@ -25,6 +32,13 @@ pub async fn check_install_status() -> Result<EngineInstallStatus, String> {
         _ => (false, None),
     };
 
+    // Check R packages
+    let (r_packages_installed, r_missing_packages) = if r_installed {
+        check_r_packages_internal()
+    } else {
+        (false, R_REQUIRED_PACKAGES.iter().map(|s| s.to_string()).collect())
+    };
+
     // Check Python installation
     let py_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
     let py_check = Command::new(py_cmd).arg("--version").output();
@@ -34,6 +48,13 @@ pub async fn check_install_status() -> Result<EngineInstallStatus, String> {
             (true, Some(version))
         }
         _ => (false, None),
+    };
+
+    // Check Python packages
+    let (python_packages_installed, python_missing_packages) = if python_installed {
+        check_python_packages_internal()
+    } else {
+        (false, PYTHON_REQUIRED_PACKAGES.iter().map(|s| s.to_string()).collect())
     };
 
     // Check Homebrew (macOS)
@@ -53,11 +74,58 @@ pub async fn check_install_status() -> Result<EngineInstallStatus, String> {
     Ok(EngineInstallStatus {
         r_installed,
         r_version,
+        r_packages_installed,
+        r_missing_packages,
         python_installed,
         python_version,
+        python_packages_installed,
+        python_missing_packages,
         homebrew_installed,
         winget_available,
     })
+}
+
+fn check_r_packages_internal() -> (bool, Vec<String>) {
+    let mut missing = Vec::new();
+
+    for pkg in R_REQUIRED_PACKAGES {
+        let check_script = format!(
+            "if (!requireNamespace('{}', quietly = TRUE)) quit(status = 1)",
+            pkg
+        );
+        let result = Command::new("Rscript")
+            .args(["-e", &check_script])
+            .output();
+
+        match result {
+            Ok(output) if output.status.success() => {}
+            _ => missing.push(pkg.to_string()),
+        }
+    }
+
+    (missing.is_empty(), missing)
+}
+
+fn check_python_packages_internal() -> (bool, Vec<String>) {
+    let py_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
+    let mut missing = Vec::new();
+
+    for pkg in PYTHON_REQUIRED_PACKAGES {
+        let check_script = format!(
+            "import importlib.util; exit(0 if importlib.util.find_spec('{}') else 1)",
+            pkg
+        );
+        let result = Command::new(py_cmd)
+            .args(["-c", &check_script])
+            .output();
+
+        match result {
+            Ok(output) if output.status.success() => {}
+            _ => missing.push(pkg.to_string()),
+        }
+    }
+
+    (missing.is_empty(), missing)
 }
 
 #[tauri::command]
@@ -131,6 +199,46 @@ pub async fn install_python() -> Result<String, String> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         Err("Automatic installation not supported on this platform".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn install_r_packages() -> Result<String, String> {
+    let packages_str = R_REQUIRED_PACKAGES.join("', '");
+    let install_script = format!(
+        "install.packages(c('{}'), repos = 'https://cloud.r-project.org/')",
+        packages_str
+    );
+
+    let result = Command::new("Rscript")
+        .args(["-e", &install_script])
+        .output()
+        .map_err(|e| format!("Failed to run Rscript: {}", e))?;
+
+    if result.status.success() {
+        Ok("R packages installed successfully".to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        Err(format!("Failed to install R packages: {}", stderr))
+    }
+}
+
+#[tauri::command]
+pub async fn install_python_packages() -> Result<String, String> {
+    let py_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
+    let packages: Vec<&str> = PYTHON_REQUIRED_PACKAGES.to_vec();
+
+    let result = Command::new(py_cmd)
+        .args(["-m", "pip", "install", "--user"])
+        .args(&packages)
+        .output()
+        .map_err(|e| format!("Failed to run pip: {}", e))?;
+
+    if result.status.success() {
+        Ok("Python packages installed successfully".to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        Err(format!("Failed to install Python packages: {}", stderr))
     }
 }
 

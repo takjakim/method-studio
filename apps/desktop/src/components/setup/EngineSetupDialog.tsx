@@ -4,8 +4,12 @@ import { invoke } from '@tauri-apps/api/core'
 interface EngineInstallStatus {
   r_installed: boolean
   r_version: string | null
+  r_packages_installed: boolean
+  r_missing_packages: string[]
   python_installed: boolean
   python_version: string | null
+  python_packages_installed: boolean
+  python_missing_packages: string[]
   homebrew_installed: boolean
   winget_available: boolean
 }
@@ -15,6 +19,8 @@ type InstallState = 'idle' | 'installing' | 'success' | 'error'
 interface InstallProgress {
   r: InstallState
   python: InstallState
+  r_packages: InstallState
+  python_packages: InstallState
   homebrew: InstallState
 }
 
@@ -25,7 +31,13 @@ interface EngineSetupDialogProps {
 export function EngineSetupDialog({ onDismiss }: EngineSetupDialogProps) {
   const [status, setStatus] = useState<EngineInstallStatus | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-  const [progress, setProgress] = useState<InstallProgress>({ r: 'idle', python: 'idle', homebrew: 'idle' })
+  const [progress, setProgress] = useState<InstallProgress>({
+    r: 'idle',
+    python: 'idle',
+    r_packages: 'idle',
+    python_packages: 'idle',
+    homebrew: 'idle'
+  })
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({})
   const [checking, setChecking] = useState(true)
 
@@ -34,7 +46,9 @@ export function EngineSetupDialog({ onDismiss }: EngineSetupDialogProps) {
     try {
       const result = await invoke<EngineInstallStatus>('check_install_status')
       setStatus(result)
-      const needsSetup = !result.r_installed || !result.python_installed
+      // Show dialog if engines or packages are missing
+      const needsSetup = !result.r_installed || !result.python_installed ||
+                         !result.r_packages_installed || !result.python_packages_installed
       setIsOpen(needsSetup)
     } catch (err) {
       console.error('Failed to check install status:', err)
@@ -86,18 +100,48 @@ export function EngineSetupDialog({ onDismiss }: EngineSetupDialogProps) {
     }
   }
 
+  const handleInstallRPackages = async () => {
+    setProgress(p => ({ ...p, r_packages: 'installing' }))
+    setErrorMessages(e => ({ ...e, r_packages: '' }))
+    try {
+      await invoke<string>('install_r_packages')
+      setProgress(p => ({ ...p, r_packages: 'success' }))
+      await checkStatus()
+    } catch (err) {
+      setProgress(p => ({ ...p, r_packages: 'error' }))
+      setErrorMessages(e => ({ ...e, r_packages: String(err) }))
+    }
+  }
+
+  const handleInstallPythonPackages = async () => {
+    setProgress(p => ({ ...p, python_packages: 'installing' }))
+    setErrorMessages(e => ({ ...e, python_packages: '' }))
+    try {
+      await invoke<string>('install_python_packages')
+      setProgress(p => ({ ...p, python_packages: 'success' }))
+      await checkStatus()
+    } catch (err) {
+      setProgress(p => ({ ...p, python_packages: 'error' }))
+      setErrorMessages(e => ({ ...e, python_packages: String(err) }))
+    }
+  }
+
   const handleDismiss = () => {
     setIsOpen(false)
     onDismiss?.()
   }
 
-  const allInstalled = status?.r_installed && status?.python_installed
+  const allInstalled = status?.r_installed && status?.python_installed &&
+                       status?.r_packages_installed && status?.python_packages_installed
 
   if (checking || !isOpen) return null
 
   const isMac = status?.homebrew_installed !== undefined && !status?.winget_available
   const needsHomebrew = isMac && !status?.homebrew_installed
   const canInstall = isMac ? status?.homebrew_installed : status?.winget_available
+
+  const needsRPackages = status?.r_installed && !status?.r_packages_installed
+  const needsPythonPackages = status?.python_installed && !status?.python_packages_installed
 
   return (
     <div
@@ -159,6 +203,16 @@ export function EngineSetupDialog({ onDismiss }: EngineSetupDialogProps) {
             onInstall={handleInstallR}
             manualUrl="https://cran.r-project.org/"
           />
+          {needsRPackages && (
+            <PackageRow
+              label="R Packages"
+              installed={status?.r_packages_installed ?? false}
+              missingPackages={status?.r_missing_packages ?? []}
+              installState={progress.r_packages}
+              errorMessage={errorMessages.r_packages}
+              onInstall={handleInstallRPackages}
+            />
+          )}
           <StatusRow
             label="Python"
             installed={status?.python_installed ?? false}
@@ -169,6 +223,16 @@ export function EngineSetupDialog({ onDismiss }: EngineSetupDialogProps) {
             onInstall={handleInstallPython}
             manualUrl="https://www.python.org/downloads/"
           />
+          {needsPythonPackages && (
+            <PackageRow
+              label="Python Packages"
+              installed={status?.python_packages_installed ?? false}
+              missingPackages={status?.python_missing_packages ?? []}
+              installState={progress.python_packages}
+              errorMessage={errorMessages.python_packages}
+              onInstall={handleInstallPythonPackages}
+            />
+          )}
           {needsHomebrew && (
             <HomebrewRow
               installState={progress.homebrew}
@@ -355,6 +419,130 @@ function StatusRow({
             Install manually
           </a>
         </div>
+      )}
+    </div>
+  )
+}
+
+interface PackageRowProps {
+  label: string
+  installed: boolean
+  missingPackages: string[]
+  installState: InstallState
+  errorMessage?: string
+  onInstall: () => void
+}
+
+function PackageRow({
+  label,
+  installed,
+  missingPackages,
+  installState,
+  errorMessage,
+  onInstall,
+}: PackageRowProps) {
+  const isInstalling = installState === 'installing'
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '12px',
+        padding: '12px',
+        marginLeft: '24px',
+        background: 'var(--color-surface-raised)',
+        border: '1px solid var(--color-border)',
+        borderRadius: '6px',
+      }}
+    >
+      {/* Status icon */}
+      <div
+        style={{
+          width: '20px',
+          height: '20px',
+          borderRadius: '50%',
+          flexShrink: 0,
+          marginTop: '1px',
+          background: installed ? 'var(--color-success, #22c55e)' : 'var(--color-warning, #f59e0b)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '11px',
+          color: 'white',
+          fontWeight: 'bold',
+        }}
+      >
+        {installed ? '✓' : '!'}
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              fontSize: 'var(--font-size-sm)',
+              fontWeight: 'var(--font-weight-semibold)',
+              color: 'var(--color-text)',
+            }}
+          >
+            {label}
+          </span>
+          {installed ? (
+            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+              All installed
+            </span>
+          ) : (
+            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+              {missingPackages.length} missing
+            </span>
+          )}
+        </div>
+        {!installed && missingPackages.length > 0 && (
+          <p
+            style={{
+              margin: '4px 0 0',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--color-text-muted)',
+              wordBreak: 'break-word',
+            }}
+          >
+            Missing: {missingPackages.join(', ')}
+          </p>
+        )}
+        {errorMessage && (
+          <p
+            style={{
+              margin: '4px 0 0',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--color-error, #ef4444)',
+              wordBreak: 'break-word',
+            }}
+          >
+            {errorMessage}
+          </p>
+        )}
+      </div>
+
+      {/* Action */}
+      {!installed && (
+        <button
+          onClick={onInstall}
+          disabled={isInstalling}
+          style={{
+            padding: '4px 12px',
+            fontSize: 'var(--font-size-xs)',
+            background: 'var(--color-accent)',
+            border: 'none',
+            borderRadius: '4px',
+            color: 'white',
+            cursor: isInstalling ? 'not-allowed' : 'pointer',
+            opacity: isInstalling ? 0.7 : 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isInstalling ? 'Installing...' : 'Install Packages'}
+        </button>
       )}
     </div>
   )
