@@ -53,15 +53,36 @@ Download the latest version for your platform from the [Releases](https://github
 
 ### Requirements
 
-Method Studio requires either R or Python to be installed on your system:
+Method Studio requires either R or Python to be installed on your system.
 
-**R Engine (Recommended)**
-- R 4.0 or higher
-- Required packages: `jsonlite`, `psych`, `lavaan`, `lme4`, `boot`
+#### R Engine (Recommended)
 
-**Python Engine**
-- Python 3.9 or higher
-- Required packages: `pandas`, `scipy`, `statsmodels`, `semopy`, `factor_analyzer`
+1. Install [R 4.0+](https://cran.r-project.org/)
+2. Install required packages:
+```r
+install.packages(c("jsonlite", "psych", "lavaan", "lme4", "boot", "mediation"))
+```
+
+#### Python Engine
+
+1. Install [Python 3.9+](https://python.org)
+2. Install required packages:
+```bash
+pip install pandas numpy scipy statsmodels semopy factor_analyzer pingouin
+```
+
+#### Verifying Installation
+
+**R:**
+```bash
+Rscript --version
+```
+
+**Python:**
+```bash
+python3 --version  # macOS/Linux
+python --version   # Windows
+```
 
 ## Supported Analyses
 

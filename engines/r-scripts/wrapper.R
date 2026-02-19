@@ -164,11 +164,43 @@ load_packages <- function(pkgs) {
 
 # Resolve a bundled script name to full path relative to this wrapper.
 script_dir <- function() {
+  # Method 0 (PREFERRED): Check environment variable set by Tauri
+  env_dir <- Sys.getenv("METHOD_STUDIO_SCRIPT_DIR", "")
+  if (nchar(env_dir) > 0 && dir.exists(env_dir)) {
+    return(env_dir)
+  }
+
   args <- commandArgs(trailingOnly = FALSE)
+
+  # Method 1: Check --file= flag (standard Rscript behavior)
   file_flag <- grep("^--file=", args, value = TRUE)
   if (length(file_flag) > 0) {
-    return(dirname(sub("^--file=", "", file_flag[1])))
+    path <- dirname(sub("^--file=", "", file_flag[1]))
+    if (dir.exists(path)) return(path)
   }
+
+  # Method 2: Check trailing arguments for script path
+  trailing_args <- commandArgs(trailingOnly = TRUE)
+  if (length(trailing_args) > 0) {
+    # The first trailing arg might be the script path
+    candidate <- trailing_args[1]
+    if (file.exists(candidate)) {
+      path <- dirname(normalizePath(candidate))
+      if (dir.exists(path)) return(path)
+    }
+  }
+
+  # Method 3: Check all args for .R file path
+  r_files <- grep("\\.R$", args, value = TRUE, ignore.case = TRUE)
+  for (f in r_files) {
+    clean_f <- sub("^--file=", "", f)
+    if (file.exists(clean_f)) {
+      path <- dirname(normalizePath(clean_f))
+      if (dir.exists(path)) return(path)
+    }
+  }
+
+  # Fallback to working directory
   return(getwd())
 }
 

@@ -439,8 +439,16 @@ fn run_with_r_wrapper(
     // Spawn wrapper, pipe JSON to stdin, collect stdout.
     let rscript_cmd = find_rscript()
         .ok_or_else(|| "Rscript not found. Please install R first.".to_string())?;
+
+    // Pass script directory via environment variable for reliable path resolution
+    let script_dir = wrapper_path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
     let mut child = Command::new(&rscript_cmd)
         .arg(wrapper_path.to_str().unwrap_or("wrapper.R"))
+        .env("METHOD_STUDIO_SCRIPT_DIR", &script_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
