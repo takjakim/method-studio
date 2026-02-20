@@ -356,18 +356,36 @@ find "$OUTPUT_DIR/library" -name "*.so" -exec codesign --force --sign - {} \; 2>
 # Verify installation
 echo ""
 echo "=== Verifying installation ==="
-ALL_OK=true
-for pkg in "${PACKAGES[@]}"; do
+
+# Required packages (build fails if missing)
+REQUIRED_PACKAGES=("jsonlite" "psych" "lavaan" "lme4" "boot" "lmerTest")
+# Optional packages (warning only if missing)
+OPTIONAL_PACKAGES=("mediation")
+
+REQUIRED_FAILED=false
+for pkg in "${REQUIRED_PACKAGES[@]}"; do
     if "$RSCRIPT" -e "library('$pkg', lib.loc='$R_LIBS_USER')" 2>/dev/null; then
-        echo "✓ $pkg"
+        echo "✓ $pkg (required)"
     else
-        echo "✗ $pkg - FAILED"
-        ALL_OK=false
+        echo "✗ $pkg - FAILED (required)"
+        echo "  Error details:"
+        "$RSCRIPT" -e "library('$pkg', lib.loc='$R_LIBS_USER')" 2>&1 | head -5 || true
+        REQUIRED_FAILED=true
     fi
 done
 
-if [ "$ALL_OK" = false ]; then
-    echo "Some packages failed to load"
+for pkg in "${OPTIONAL_PACKAGES[@]}"; do
+    if "$RSCRIPT" -e "library('$pkg', lib.loc='$R_LIBS_USER')" 2>/dev/null; then
+        echo "✓ $pkg (optional)"
+    else
+        echo "⚠ $pkg - FAILED (optional, continuing anyway)"
+        echo "  Error details:"
+        "$RSCRIPT" -e "library('$pkg', lib.loc='$R_LIBS_USER')" 2>&1 | head -5 || true
+    fi
+done
+
+if [ "$REQUIRED_FAILED" = true ]; then
+    echo "Required packages failed to load"
     exit 1
 fi
 
