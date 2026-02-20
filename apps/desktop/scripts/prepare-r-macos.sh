@@ -12,10 +12,12 @@ if [[ "$ARCH" == "arm64" ]] || [[ "$ARCH" == "aarch64" ]]; then
     ARCH="arm64"
     R_ARCH="arm64"
     R_VARIANT="arm64"
+    OLD_FRAMEWORK_PATH="/Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib"
 elif [[ "$ARCH" == "x86_64" ]] || [[ "$ARCH" == "amd64" ]]; then
     ARCH="x64"
     R_ARCH="x86_64"
     R_VARIANT="x86_64"
+    OLD_FRAMEWORK_PATH="/Library/Frameworks/R.framework/Versions/4.5/Resources/lib"
 else
     echo "Error: Unsupported architecture: $ARCH"
     exit 1
@@ -39,6 +41,7 @@ echo "Temporary directory: $TEMP_DIR"
 # Clean up on exit
 cleanup() {
     echo "Cleaning up temporary files..."
+    cd /tmp  # Change to a safe directory before cleanup
     rm -rf "$TEMP_DIR"
 }
 trap cleanup EXIT
@@ -64,8 +67,7 @@ cd "$TEMP_DIR"
 # Use pkgutil to expand the pkg
 pkgutil --expand "$R_PKG" R-expanded
 
-# Find R-framework.pkg specifically
-# Try common variations: R-fw.pkg, R-framework.pkg, r-framework.pkg
+# Find R-framework.pkg
 R_FRAMEWORK_PKG=""
 for pkg_name in "R-fw.pkg" "R-framework.pkg" "r-framework.pkg" "R-Framework.pkg"; do
     if [[ -d "R-expanded/$pkg_name" ]]; then
@@ -116,11 +118,10 @@ mkdir -p "$OUTPUT_DIR"/{bin,lib,library}
 echo "Copying R.framework..."
 cp -R "$R_FRAMEWORK/Versions/Current/Resources" "$OUTPUT_DIR/lib/R"
 
-# Copy R executable and create Rscript symlink
+# Copy R executable and Rscript to bin
 if [[ -f "$R_FRAMEWORK/Versions/Current/Resources/bin/R" ]]; then
     cp "$R_FRAMEWORK/Versions/Current/Resources/bin/R" "$OUTPUT_DIR/bin/"
 fi
-
 if [[ -f "$R_FRAMEWORK/Versions/Current/Resources/bin/Rscript" ]]; then
     cp "$R_FRAMEWORK/Versions/Current/Resources/bin/Rscript" "$OUTPUT_DIR/bin/"
 fi
@@ -130,46 +131,164 @@ if [[ -d "$R_FRAMEWORK/Versions/Current/Resources/lib" ]]; then
     cp -R "$R_FRAMEWORK/Versions/Current/Resources/lib"/* "$OUTPUT_DIR/lib/R/lib/" 2>/dev/null || true
 fi
 
-# Set up R_HOME for portable use
-echo "Configuring portable R_HOME..."
+echo ""
+echo "=== Patching binaries for portable use ==="
 
-# Debug: Show what was actually copied
-echo "Debug: Checking copied files..."
-echo "  Contents of $OUTPUT_DIR/bin/:"
-ls -la "$OUTPUT_DIR/bin/" 2>/dev/null || echo "    Directory is empty or doesn't exist"
-echo "  Contents of $OUTPUT_DIR/lib/R/bin/:"
-ls -la "$OUTPUT_DIR/lib/R/bin/" 2>/dev/null || echo "    Directory is empty or doesn't exist"
+# Function to fix library paths in a binary
+fix_binary_paths() {
+    local binary="$1"
+    local loader_path_prefix="$2"  # e.g., "@loader_path/../lib" or "@loader_path/../../lib"
 
-# Make original binaries executable if they exist
-if [[ -f "$OUTPUT_DIR/bin/R" ]]; then
-    chmod +x "$OUTPUT_DIR/bin/R"
-    echo "  Made $OUTPUT_DIR/bin/R executable"
+    local LIBS_TO_FIX=("libR.dylib" "libRlapack.dylib" "libRblas.dylib" "libgfortran.5.dylib" "libquadmath.0.dylib" "libgcc_s.1.1.dylib" "libomp.dylib")
+
+    for lib in "${LIBS_TO_FIX[@]}"; do
+        if otool -L "$binary" 2>/dev/null | grep -q "$OLD_FRAMEWORK_PATH/$lib"; then
+            install_name_tool -change \
+                "$OLD_FRAMEWORK_PATH/$lib" \
+                "${loader_path_prefix}/${lib}" \
+                "$binary" 2>/dev/null || true
+        fi
+    done
+}
+
+# 1. Fix the R binary (bin/exec/R)
+echo "Fixing R binary..."
+R_BINARY="$OUTPUT_DIR/lib/R/bin/exec/R"
+if [[ -f "$R_BINARY" ]]; then
+    fix_binary_paths "$R_BINARY" "@loader_path/../../lib"
 fi
-if [[ -f "$OUTPUT_DIR/bin/Rscript" ]]; then
-    chmod +x "$OUTPUT_DIR/bin/Rscript"
-    echo "  Made $OUTPUT_DIR/bin/Rscript executable"
+
+# 2. Fix the dylib files in lib/R/lib/
+echo "Fixing dynamic libraries..."
+LIB_DIR="$OUTPUT_DIR/lib/R/lib"
+for dylib in "$LIB_DIR"/*.dylib; do
+    if [[ -f "$dylib" ]]; then
+        # Fix install name
+        LIB_NAME=$(basename "$dylib")
+        install_name_tool -id "@loader_path/$LIB_NAME" "$dylib" 2>/dev/null || true
+        # Fix dependencies
+        fix_binary_paths "$dylib" "@loader_path"
+    fi
+done
+
+# 3. Fix module .so files
+echo "Fixing module files..."
+MODULES_DIR="$OUTPUT_DIR/lib/R/modules"
+if [[ -d "$MODULES_DIR" ]]; then
+    for so_file in "$MODULES_DIR"/*.so; do
+        if [[ -f "$so_file" ]]; then
+            fix_binary_paths "$so_file" "@loader_path/../lib"
+        fi
+    done
 fi
 
-# Create wrapper scripts that set R_HOME correctly
-cat > "$OUTPUT_DIR/bin/R-wrapper" << 'EOF'
+# 4. Fix library package .so files
+echo "Fixing library package files..."
+find "$OUTPUT_DIR/lib/R/library" -name "*.so" 2>/dev/null | while read so_file; do
+    fix_binary_paths "$so_file" "@loader_path/../../../lib"
+done
+
+# 5. Create portable R shell script
+echo "Creating portable R shell script..."
+cat > "$OUTPUT_DIR/lib/R/bin/R" << 'RSCRIPT'
+#!/bin/sh
+# Shell wrapper for R executable - PORTABLE VERSION
+
+# Calculate R_HOME from script location if not set
+if [ -z "$R_HOME" ]; then
+    R_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+fi
+export R_HOME
+
+R_SHARE_DIR="${R_HOME}/share"
+export R_SHARE_DIR
+R_INCLUDE_DIR="${R_HOME}/include"
+export R_INCLUDE_DIR
+R_DOC_DIR="${R_HOME}/doc"
+export R_DOC_DIR
+
+R_binary="${R_HOME}/bin/exec/R"
+
+exec "$R_binary" "$@"
+RSCRIPT
+chmod +x "$OUTPUT_DIR/lib/R/bin/R"
+
+# 6. Create Rscript wrapper (avoids hardcoded paths in Rscript binary)
+echo "Creating Rscript wrapper..."
+cat > "$OUTPUT_DIR/bin/Rscript-wrapper" << 'WRAPPER'
+#!/bin/bash
+# Rscript wrapper that uses R directly to avoid hardcoded paths in Rscript binary
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export R_HOME="$SCRIPT_DIR/../lib/R"
+export R_LIBS_USER="$SCRIPT_DIR/../library"
+
+# Parse arguments to convert Rscript format to R format
+EXPRS=()
+OPTS=()
+FILE=""
+POST_ARGS=()
+PROCESSING_EXPRS=false
+PROCESSING_ARGS=false
+
+for arg in "$@"; do
+    if [ "$PROCESSING_ARGS" = true ]; then
+        POST_ARGS+=("$arg")
+    elif [ "$arg" = "--args" ]; then
+        PROCESSING_ARGS=true
+    elif [ "$arg" = "-e" ]; then
+        PROCESSING_EXPRS=true
+    elif [ "$PROCESSING_EXPRS" = true ]; then
+        EXPRS+=("-e" "$arg")
+        PROCESSING_EXPRS=false
+    elif [[ "$arg" == --* ]]; then
+        OPTS+=("$arg")
+    elif [ -z "$FILE" ] && [ -f "$arg" ]; then
+        FILE="$arg"
+    else
+        POST_ARGS+=("$arg")
+    fi
+done
+
+# Build the R command
+CMD=("$R_HOME/bin/R" "--slave" "--no-restore")
+
+for opt in "${OPTS[@]}"; do
+    CMD+=("$opt")
+done
+
+if [ ${#EXPRS[@]} -gt 0 ]; then
+    for expr in "${EXPRS[@]}"; do
+        CMD+=("$expr")
+    done
+elif [ -n "$FILE" ]; then
+    CMD+=("-f" "$FILE")
+fi
+
+if [ ${#POST_ARGS[@]} -gt 0 ]; then
+    CMD+=("--args")
+    for arg in "${POST_ARGS[@]}"; do
+        CMD+=("$arg")
+    done
+fi
+
+exec "${CMD[@]}"
+WRAPPER
+chmod +x "$OUTPUT_DIR/bin/Rscript-wrapper"
+
+# Also create R-wrapper
+cat > "$OUTPUT_DIR/bin/R-wrapper" << 'RWRAPPER'
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export R_HOME="$SCRIPT_DIR/../lib/R"
 export R_LIBS_USER="$SCRIPT_DIR/../library"
 exec "$R_HOME/bin/R" "$@"
-EOF
+RWRAPPER
 chmod +x "$OUTPUT_DIR/bin/R-wrapper"
 
-cat > "$OUTPUT_DIR/bin/Rscript-wrapper" << 'EOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export R_HOME="$SCRIPT_DIR/../lib/R"
-export R_LIBS_USER="$SCRIPT_DIR/../library"
-exec "$R_HOME/bin/Rscript" "$@"
-EOF
-chmod +x "$OUTPUT_DIR/bin/Rscript-wrapper"
-
-echo "  Created wrapper scripts with R_HOME configuration"
+# 7. Re-sign all modified binaries
+echo "Re-signing binaries..."
+find "$OUTPUT_DIR" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign --force --sign - {} \; 2>/dev/null || true
+codesign --force --sign - "$OUTPUT_DIR/lib/R/bin/exec/R" 2>/dev/null || true
 
 # Remove unnecessary files to reduce size
 echo ""
@@ -186,45 +305,15 @@ find "$OUTPUT_DIR/lib/R" -name "*.html" -delete 2>/dev/null || true
 echo ""
 echo "=== Installing required R packages ==="
 
-# Set R_HOME and R_LIBS_USER for package installation
 export R_HOME="$OUTPUT_DIR/lib/R"
 export R_LIBS_USER="$OUTPUT_DIR/library"
+RSCRIPT="$OUTPUT_DIR/bin/Rscript-wrapper"
 
-# Try to use the wrapper script first, fall back to direct Rscript if needed
-if [[ -f "$OUTPUT_DIR/bin/Rscript-wrapper" ]]; then
-    RSCRIPT="$OUTPUT_DIR/bin/Rscript-wrapper"
-    echo "Using Rscript wrapper at: $RSCRIPT"
-elif [[ -f "$OUTPUT_DIR/bin/Rscript" ]]; then
-    RSCRIPT="$OUTPUT_DIR/bin/Rscript"
-    echo "Using direct Rscript at: $RSCRIPT"
-elif [[ -f "$OUTPUT_DIR/lib/R/bin/Rscript" ]]; then
-    RSCRIPT="$OUTPUT_DIR/lib/R/bin/Rscript"
-    echo "Using Rscript from lib/R/bin at: $RSCRIPT"
-else
-    echo "Error: Rscript not found in any expected location"
-    echo "Searched locations:"
-    echo "  - $OUTPUT_DIR/bin/Rscript-wrapper"
-    echo "  - $OUTPUT_DIR/bin/Rscript"
-    echo "  - $OUTPUT_DIR/lib/R/bin/Rscript"
-    exit 1
-fi
-
-# Make sure the script is executable
-chmod +x "$RSCRIPT"
-
-# Test R installation before proceeding
+# Test R installation
 echo "Testing R installation..."
-if ! "$RSCRIPT" --version >/dev/null 2>&1; then
-    echo "Error: Rscript failed to execute"
-    echo "Trying to get more information..."
-    "$RSCRIPT" --version 2>&1 || true
-    echo ""
-    echo "R_HOME is set to: $R_HOME"
-    echo "Checking if R_HOME exists: $(test -d "$R_HOME" && echo "YES" || echo "NO")"
-    if [[ -d "$R_HOME" ]]; then
-        echo "R_HOME contents:"
-        ls -la "$R_HOME" | head -20
-    fi
+if ! "$RSCRIPT" -e "cat('R is working\n')" 2>/dev/null; then
+    echo "Error: R installation test failed"
+    "$RSCRIPT" -e "cat('test')" 2>&1 || true
     exit 1
 fi
 echo "R installation test passed"
@@ -241,29 +330,55 @@ PACKAGES=(
 
 for pkg in "${PACKAGES[@]}"; do
     echo "Installing package: $pkg"
-    "$RSCRIPT" -e "install.packages('$pkg', repos='https://cran.r-project.org', lib='$R_LIBS_USER', quiet=FALSE)"
+    "$RSCRIPT" -e "install.packages('$pkg', repos='https://cran.r-project.org', lib='$R_LIBS_USER', quiet=FALSE)" || {
+        echo "Warning: Failed to install $pkg, retrying..."
+        "$RSCRIPT" -e "install.packages('$pkg', repos='https://cloud.r-project.org', lib='$R_LIBS_USER', quiet=FALSE)"
+    }
 done
+
+# Fix paths in installed packages
+echo ""
+echo "=== Fixing installed package binaries ==="
+find "$OUTPUT_DIR/library" -name "*.so" 2>/dev/null | while read so_file; do
+    for lib in "libR.dylib" "libRlapack.dylib" "libRblas.dylib" "libgfortran.5.dylib" "libquadmath.0.dylib"; do
+        if otool -L "$so_file" 2>/dev/null | grep -q "$OLD_FRAMEWORK_PATH/$lib"; then
+            install_name_tool -change \
+                "$OLD_FRAMEWORK_PATH/$lib" \
+                "@loader_path/../../../lib/R/lib/$lib" \
+                "$so_file" 2>/dev/null || true
+        fi
+    done
+done
+
+# Re-sign installed package binaries
+find "$OUTPUT_DIR/library" -name "*.so" -exec codesign --force --sign - {} \; 2>/dev/null || true
 
 # Verify installation
 echo ""
 echo "=== Verifying installation ==="
+ALL_OK=true
 for pkg in "${PACKAGES[@]}"; do
-    if "$RSCRIPT" -e "library('$pkg')" 2>/dev/null; then
+    if "$RSCRIPT" -e "library('$pkg', lib.loc='$R_LIBS_USER')" 2>/dev/null; then
         echo "✓ $pkg"
     else
         echo "✗ $pkg - FAILED"
-        exit 1
+        ALL_OK=false
     fi
 done
+
+if [ "$ALL_OK" = false ]; then
+    echo "Some packages failed to load"
+    exit 1
+fi
 
 # Print summary
 echo ""
 echo "=== Installation Summary ==="
-echo "R Version: $("$RSCRIPT" --version 2>&1 | head -n 1)"
+echo "R Version: $("$RSCRIPT" -e "cat(R.version.string)" 2>/dev/null)"
 echo "R_HOME: $R_HOME"
 echo "R_LIBS_USER: $R_LIBS_USER"
 echo "Installed packages:"
-"$RSCRIPT" -e "cat(paste('  -', rownames(installed.packages(lib.loc='$R_LIBS_USER'))), sep='\n')"
+"$RSCRIPT" -e "cat(paste('  -', rownames(installed.packages(lib.loc='$R_LIBS_USER'))), sep='\n')" 2>/dev/null
 
 # Calculate bundle size
 BUNDLE_SIZE=$(du -sh "$OUTPUT_DIR" | cut -f1)
@@ -276,5 +391,5 @@ echo "=== R preparation complete ==="
 echo "Portable R is ready at: $OUTPUT_DIR"
 echo ""
 echo "Usage:"
-echo "  R_HOME=$OUTPUT_DIR/lib/R $OUTPUT_DIR/bin/Rscript script.R"
-echo "  Or use the wrapper: $OUTPUT_DIR/bin/Rscript-wrapper script.R"
+echo "  $OUTPUT_DIR/bin/Rscript-wrapper script.R"
+echo "  $OUTPUT_DIR/bin/Rscript-wrapper -e \"print('Hello')\""
