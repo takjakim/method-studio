@@ -17,7 +17,7 @@ elif [[ "$ARCH" == "x86_64" ]] || [[ "$ARCH" == "amd64" ]]; then
     ARCH="x64"
     R_ARCH="x86_64"
     R_VARIANT="x86_64"
-    OLD_FRAMEWORK_PATH="/Library/Frameworks/R.framework/Versions/4.5/Resources/lib"
+    OLD_FRAMEWORK_PATH="/Library/Frameworks/R.framework/Versions/4.5-x86_64/Resources/lib"
 else
     echo "Error: Unsupported architecture: $ARCH"
     exit 1
