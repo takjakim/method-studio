@@ -30,10 +30,10 @@ ARCH="${1:-$(uname -m)}"
 case "$ARCH" in
     "arm64"|"aarch64")
         ARCH="arm64"
-        PYTHON_ARCH="arm64"
+        PYTHON_ARCH="aarch64"  # python-build-standalone uses "aarch64" in URL
         ;;
     "x86_64"|"amd64")
-        ARCH="x86_64"
+        ARCH="x64"
         PYTHON_ARCH="x86_64"
         ;;
     *)
@@ -45,8 +45,9 @@ esac
 log_info "Preparing Python for macOS-${ARCH}"
 
 # Python version
-PYTHON_VERSION="3.12.8"
+PYTHON_VERSION="3.12.7"
 PYTHON_MAJOR_MINOR="3.12"
+PYTHON_RELEASE_DATE="20241016"
 
 # Directory setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -79,20 +80,32 @@ PYTHON_PACKAGES=(
 
 # Download Python standalone build
 download_python() {
-    local python_pkg="python-${PYTHON_VERSION}-macos11-${PYTHON_ARCH}.tar.gz"
-    local download_url="https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-${PYTHON_VERSION}+20241016-${PYTHON_ARCH}-apple-darwin-install_only.tar.gz"
+    local python_pkg="python-${PYTHON_VERSION}-macos-${PYTHON_ARCH}.tar.gz"
+    local download_url="https://github.com/indygreg/python-build-standalone/releases/download/${PYTHON_RELEASE_DATE}/cpython-${PYTHON_VERSION}+${PYTHON_RELEASE_DATE}-${PYTHON_ARCH}-apple-darwin-install_only.tar.gz"
     local download_path="$DOWNLOAD_DIR/$python_pkg"
 
+    # Clear cached download if it's too small (likely corrupted or error page)
     if [ -f "$download_path" ]; then
-        log_info "Python package already downloaded: $python_pkg"
-        return 0
+        local file_size=$(stat -f%z "$download_path" 2>/dev/null || stat -c%s "$download_path" 2>/dev/null || echo "0")
+        if [ "$file_size" -lt 1000000 ]; then
+            log_warn "Existing download is too small ($file_size bytes), re-downloading..."
+            rm -f "$download_path"
+        else
+            log_info "Python package already downloaded: $python_pkg"
+            return 0
+        fi
     fi
 
     log_info "Downloading Python ${PYTHON_VERSION} for ${PYTHON_ARCH}..."
     log_info "URL: $download_url"
 
     if command -v curl &> /dev/null; then
-        curl -L -o "$download_path" "$download_url"
+        curl -fSL -o "$download_path" "$download_url"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to download Python. Check the URL: $download_url"
+            rm -f "$download_path"
+            exit 1
+        fi
     elif command -v wget &> /dev/null; then
         wget -O "$download_path" "$download_url"
     else
@@ -100,7 +113,15 @@ download_python() {
         exit 1
     fi
 
-    log_info "Download complete: $python_pkg"
+    # Verify download size
+    local file_size=$(stat -f%z "$download_path" 2>/dev/null || stat -c%s "$download_path" 2>/dev/null || echo "0")
+    if [ "$file_size" -lt 1000000 ]; then
+        log_error "Downloaded file is too small ($file_size bytes). Download may have failed."
+        rm -f "$download_path"
+        exit 1
+    fi
+
+    log_info "Download complete: $python_pkg ($file_size bytes)"
 }
 
 # Extract Python
